@@ -190,7 +190,7 @@ with scheduled backups. `docker-compose.yml` is only used for local development.
 **App**
 
 5. *New Resource → Private Repository (with GitHub App)*: this repository, branch `master`,
-   build pack **Dockerfile**, *Ports Exposes* `8000`, domain `https://training-svfislisbach.duckdns.org`.
+   build pack **Dockerfile** (the default is Nixpacks; check it under *General*), *Ports Exposes* `8000`, domain `https://training-svfislisbach.duckdns.org`.
    Do not map any ports to the host.
 6. *Environment Variables* (runtime only, no build variables needed):
 
@@ -203,11 +203,13 @@ with scheduled backups. `docker-compose.yml` is only used for local development.
    | `DATABASE_URL` | the internal Postgres URL from step 3 |
    | `DEFAULT_FROM_EMAIL`, `EMAIL_*` | once the SMTP account is known (until then mails go to the log) |
 
-7. *Healthcheck*: enable, path `/health/`, port `8000` (the image contains `curl`; the Dockerfile also
+7. *Healthcheck*: enable, path `/health` (with or without trailing slash), port `8000` (the image contains `curl`; the Dockerfile also
    defines a `HEALTHCHECK`). `/health/` also checks the database connection.
 8. *Advanced*: enable **Auto Deploy**, so that every push to `master` deploys.
 9. *Deploy*. On start, the container runs the migrations and creates the cache table.
 10. Create the first administrator in *Terminal* of the app: `python manage.py createsuperuser`.
+    The Coolify terminal needs ports 6001/6002 to be reachable; alternatively via SSH on the server:
+    `docker exec -it $(docker ps -qf name=<app-uuid>) python manage.py createsuperuser`.
 11. Check login and recording on the domain. Once HTTPS works reliably, set `DJANGO_HSTS_SECONDS=31536000`
     and redeploy.
 

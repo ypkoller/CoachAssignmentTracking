@@ -128,7 +128,7 @@ Entscheide: App per **Dockerfile-Build-Pack**, Postgres als **eigene Coolify-Res
       CLAUDE.md ergänzen
 - [x] 8. Verifikation: Tests, mypy, `check --deploy` ohne Warnungen, Image mit Produktions-Env lokal starten,
       Healthcheck, UI ohne CDN im Browser/HTTP prüfen
-- [ ] 9. Nach Freigabe: in Coolify einrichten (durch dich, mit Anleitung) → erstes Deployment →
+- [x] 9. Nach Freigabe: in Coolify einrichten (durch dich, mit Anleitung) → erstes Deployment →
       `createsuperuser` im Coolify-Terminal → Login und Erfassen auf der echten Domain testen
 
 ## Benötigte Angaben
@@ -160,4 +160,9 @@ Auto-Deploy nur `master` · SMTP folgt später · Backups täglich nur auf dem S
   Hash wie vorher) und Roboto lokal → keine externen Quellen mehr
 - Zusätzlich: `EMAIL_USE_SSL` für SMTP über Port 465 (z.B. Bluewin)
 - 44 Tests grün, mypy ohne Befunde, Healthcheck «healthy», Seiten nach Login per HTTP geprüft
-- Offen: Schritt 9 (Coolify einrichten) sobald der Server bereit ist; SMTP-Zugang
+- Schritt 9 erledigt (2026-10-18): live auf https://training-svfislisbach.duckdns.org, Zertifikat gültig,
+  HTTP→HTTPS, `/health` 200, Admin angelegt, Login funktioniert. Stolpersteine:
+  - Build Pack stand auf Nixpacks (Python 3.13) → auf Dockerfile umgestellt
+  - Coolify fragt `/health` ohne Slash ab → Middleware akzeptiert beide (Test ergänzt, 45 Tests)
+  - Coolify-Terminal braucht Ports 6001/6002 → Admin per SSH + `docker exec` angelegt
+- Offen: SMTP-Zugang; HSTS einschalten, wenn HTTPS einige Tage stabil läuft
