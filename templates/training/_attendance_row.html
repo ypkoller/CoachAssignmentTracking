@@ -1,0 +1,20 @@
+{# One row with a one-tap toggle. `row` = row, `mode` = "squad" (title: squad) or "person". #}
+<li id="attendance-{{ row.person.pk }}-{{ row.squad.pk }}" class="flex items-center justify-between gap-3 rounded-xl bg-white p-4 shadow-sm">
+  <div class="min-w-0">
+    <p class="truncate font-medium">{% if mode == "person" %}{{ row.person }}{% else %}{{ row.squad }}{% endif %}</p>
+    <p class="text-sm text-gray-500">{{ row.role }}</p>
+    {% if row.error %}<p class="mt-1 text-sm text-red-700">{{ row.error }}</p>{% endif %}
+  </div>
+  {% if row.can_edit %}
+  <button type="button"
+          hx-post="{% url 'toggle_attendance' %}"
+          hx-vals='{"person": "{{ row.person.pk }}", "squad": "{{ row.squad.pk }}", "date": "{{ row.date|date:"Y-m-d" }}", "mode": "{{ mode }}"}'
+          hx-target="#attendance-{{ row.person.pk }}-{{ row.squad.pk }}" hx-swap="outerHTML"
+          hx-disabled-elt="this"
+          class="shrink-0 rounded-full px-5 py-2.5 text-sm font-medium transition {% if row.attendance %}bg-svf text-white hover:bg-svf-dark{% else %}border-2 border-svf text-svf hover:bg-svf-pale{% endif %}">
+    {% if row.attendance %}✓ Erfasst{% else %}Erfassen{% endif %}
+  </button>
+  {% else %}
+  <span class="shrink-0 text-sm {% if row.attendance %}font-medium text-svf{% else %}text-gray-400{% endif %}">{% if row.attendance %}✓ Erfasst{% else %}–{% endif %}</span>
+  {% endif %}
+</li>

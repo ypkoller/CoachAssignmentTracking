@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Erfassen{% endblock %}
+{% block content %}
+{% url 'record' as target_url %}
+{% include "training/_date_nav.html" %}
+{% include "training/_record_day.html" %}
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Auswertung{% endblock %}
+{% block content %}
+<h1 class="mb-4 text-2xl font-bold text-svf-dark">Auswertung</h1>
+
+<form method="get" class="form-svf mb-6 grid grid-cols-2 gap-3 rounded-xl bg-white p-4 shadow-sm sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+  <div><label for="from" class="mb-1 block text-sm font-medium">Von</label><input type="date" id="from" name="from" value="{{ since|date:'Y-m-d' }}"></div>
+  <div><label for="to" class="mb-1 block text-sm font-medium">Bis</label><input type="date" id="to" name="to" value="{{ until|date:'Y-m-d' }}"></div>
+  <button class="col-span-2 rounded-lg bg-svf px-4 py-2.5 font-medium text-white hover:bg-svf-dark sm:col-span-1">Anzeigen</button>
+</form>
+
+<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+  <h2 class="text-sm font-semibold uppercase tracking-wide text-svf">Anzahl Einsätze</h2>
+  <div class="flex gap-2 text-sm">
+    <a href="{% url 'export' %}?from={{ since|date:'Y-m-d' }}&amp;to={{ until|date:'Y-m-d' }}&amp;format=xlsx" class="rounded-full bg-svf px-4 py-2 font-medium text-white hover:bg-svf-dark">Excel</a>
+    <a href="{% url 'export' %}?from={{ since|date:'Y-m-d' }}&amp;to={{ until|date:'Y-m-d' }}&amp;format=csv" class="rounded-full border-2 border-svf px-4 py-2 font-medium text-svf hover:bg-svf-pale">CSV</a>
+  </div>
+</div>
+<div class="mb-8 overflow-x-auto rounded-xl bg-white shadow-sm">
+  <table class="w-full text-left text-sm">
+    <thead class="bg-svf-light/60 text-svf-dark">
+      <tr><th class="px-4 py-2">Person</th><th class="px-4 py-2">Riege</th><th class="px-4 py-2">Funktion</th><th class="px-4 py-2 text-right">Anzahl</th></tr>
+    </thead>
+    <tbody>
+      {% for row in summary %}
+      <tr class="border-t border-gray-100"><td class="px-4 py-2">{{ row.person__first_name }} {{ row.person__last_name }}</td><td class="px-4 py-2">{{ row.squad__name }}</td><td class="px-4 py-2">{{ row.role }}</td><td class="px-4 py-2 text-right font-medium">{{ row.count }}</td></tr>
+      {% empty %}
+      <tr><td colspan="4" class="px-4 py-3 text-gray-500">Keine Einsätze im gewählten Zeitraum.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-svf">Einzelne Einsätze ({{ count }})</h2>
+<div class="overflow-x-auto rounded-xl bg-white shadow-sm">
+  <table class="w-full text-left text-sm">
+    <thead class="bg-svf-light/60 text-svf-dark">
+      <tr><th class="px-4 py-2">Datum</th><th class="px-4 py-2">Riege</th><th class="px-4 py-2">Person</th><th class="px-4 py-2">Funktion</th></tr>
+    </thead>
+    <tbody>
+      {% for attendance in attendances %}
+      <tr class="border-t border-gray-100"><td class="whitespace-nowrap px-4 py-2">{{ attendance.date|date:"d.m.Y" }}</td><td class="px-4 py-2">{{ attendance.squad }}</td><td class="px-4 py-2">{{ attendance.person }}</td><td class="px-4 py-2">{{ attendance.get_role_display }}</td></tr>
+      {% empty %}
+      <tr><td colspan="4" class="px-4 py-3 text-gray-500">Keine Einsätze im gewählten Zeitraum.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

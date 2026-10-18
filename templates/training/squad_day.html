@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ squad }}{% endblock %}
+{% block content %}
+<div class="mb-4 flex items-start justify-between gap-3">
+  <div>
+    <a href="{% url 'record' %}" class="text-sm text-svf hover:underline">‹ Zurück</a>
+    <h1 class="text-2xl font-bold text-svf-dark">{{ squad }}</h1>
+  </div>
+  <a href="{% url 'assignments' squad.pk %}" class="mt-5 rounded-full border-2 border-svf px-4 py-2 text-sm font-medium text-svf hover:bg-svf-pale">Leiter verwalten</a>
+</div>
+{% url 'squad_day' squad.pk as target_url %}
+{% include "training/_date_nav.html" %}
+{% include "training/_squad_day.html" %}
+{% endblock %}

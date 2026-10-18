@@ -1,0 +1,85 @@
+{% load static %}<!doctype html>
+<html lang="de-CH">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}Trainingserfassung{% endblock %}</title>
+  <meta name="theme-color" content="#125B76">
+  <link rel="manifest" href="{% url 'manifest' %}">
+  <link rel="icon" href="{% static 'icons/icon.svg' %}" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  {# v0.1: Tailwind via CDN. Replace later with a Tailwind build in the Docker image. #}
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script>
+    // Colors based on www.svfislisbach.ch
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ["Roboto", "sans-serif"] },
+          colors: {
+            svf: {
+              DEFAULT: "#33708C",
+              dark: "#125B76",
+              accent: "#1F9AC6",
+              light: "#B4E3F3",
+              pale: "#E7F5FA",
+              text: "#333333",
+            },
+          },
+        },
+      },
+    };
+  </script>
+  <style type="text/tailwindcss">
+    @layer components {
+      .form-svf input:not([type=checkbox]), .form-svf select {
+        @apply w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 focus:border-svf-accent focus:outline-none focus:ring-2 focus:ring-svf-light;
+      }
+    }
+  </style>
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+</head>
+<body class="min-h-screen bg-svf-pale font-sans text-svf-text" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  <header class="sticky top-0 z-10 bg-svf-dark/95 text-white shadow">
+    <div class="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
+      <a href="{% url 'home' %}" class="text-lg font-bold tracking-wide">Trainingserfassung</a>
+      {% if user.is_authenticated %}
+      <nav class="flex items-center gap-1 text-sm">
+        <a href="{% url 'record' %}" class="rounded px-2 py-1 hover:bg-white/15">Erfassen</a>
+        <a href="{% url 'attendance_list' %}" class="rounded px-2 py-1 hover:bg-white/15">Auswertung</a>
+        {% if user.is_staff %}<a href="{% url 'admin:index' %}" class="rounded px-2 py-1 hover:bg-white/15">Admin</a>{% endif %}
+        <details class="relative">
+          <summary class="cursor-pointer list-none rounded px-2 py-1 hover:bg-white/15">☰</summary>
+          <div class="absolute right-0 mt-2 w-56 rounded-lg bg-white py-2 text-svf-text shadow-lg">
+            <p class="truncate px-4 pb-2 text-xs text-gray-500">{{ user.email }}</p>
+            <a href="{% url 'password_change' %}" class="block px-4 py-2 hover:bg-svf-pale">Passwort ändern</a>
+            <form method="post" action="{% url 'logout' %}">{% csrf_token %}
+              <button class="w-full px-4 py-2 text-left hover:bg-svf-pale">Abmelden</button>
+            </form>
+          </div>
+        </details>
+      </nav>
+      {% endif %}
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-3xl px-4 py-6">
+    {% for message in messages %}
+    <div class="mb-4 rounded-lg border px-4 py-3 text-sm break-all
+      {% if message.tags == 'error' %}border-red-300 bg-red-50 text-red-800{% elif message.tags == 'warning' %}border-amber-300 bg-amber-50 text-amber-900{% else %}border-svf-light bg-white text-svf-dark{% endif %}">
+      {{ message }}
+    </div>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("{% url 'service_worker' %}");
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{# Date picker: reloads the day section via HTMX. Expects `target_url`. #}
+<form class="form-svf mb-4 flex items-end gap-2" hx-get="{{ target_url }}" hx-target="#day" hx-swap="outerHTML" hx-trigger="change" hx-push-url="true">
+  <div class="flex-1">
+    <label for="date" class="mb-1 block text-sm font-medium">Datum</label>
+    <input type="date" id="date" name="date" value="{{ date|date:'Y-m-d' }}" max="{{ date_max|date:'Y-m-d' }}"{% if date_min %} min="{{ date_min|date:'Y-m-d' }}"{% endif %} required>
+  </div>
+  <a href="{{ target_url }}" class="rounded-lg border border-svf bg-white px-4 py-2.5 text-sm font-medium text-svf hover:bg-svf-pale">Heute</a>
+</form>

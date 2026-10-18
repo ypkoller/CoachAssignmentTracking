@@ -1,140 +1,167 @@
 # Trainingserfassung
 
-Mobile-taugliche Browser-App (PWA) zur Erfassung von Leitereinsätzen pro Riege, mit Auswertung und Export der Anzahl Einsätze.
+Mobile-friendly browser app (PWA) for recording leader attendances per squad ("Riege"), with
+reports and an export of the number of attendances. The user interface is in German.
 
-## Tech-Stack
+## Tech stack
 
-| Bereich | Technologie | Zweck |
+| Area | Technology | Purpose |
 |---|---|---|
-| Sprache | **Python 3.14** (`python:3.14-slim`) | |
-| Paketverwaltung | **Poetry 2.x** + `pyproject.toml` | Abhängigkeiten, Lockfile (`poetry.lock`), virtuelle Umgebung |
-| Framework | **Django 6.x** | Backend, ORM, Admin, Auth, Templates |
-| Frontend | Django-Templates + **HTMX** | Dynamische Interaktionen ohne Neuladen, kein separates JS-Frontend |
-| Styling | **Tailwind CSS** | Mobile-first Layout |
-| PWA | Web App Manifest + Service Worker | Icon auf dem Home-Bildschirm, Vollbild |
-| Datenbank | **PostgreSQL 17** (`postgres:17-alpine`) | Inkl. Partial Unique Index und Exclusion Constraints (`btree_gist`) für Geschäftsregeln |
-| App-Server | **Gunicorn** | Produktiver WSGI-Server im Container |
-| Statische Dateien | **WhiteNoise** | Auslieferung von CSS/JS direkt aus Django |
-| Export | `openpyxl` / CSV | Excel-Export der Anzahl Einsätze |
-| Passwort-Hashing | Argon2 (`argon2-cffi`) | Alternativ Django-Standard PBKDF2 |
-| Rate-Limiting | `django-axes` / `django-ratelimit` | Schutz von Login und Passwort-Reset |
-| Deployment | **Docker Compose → Coolify** | Coolify übernimmt HTTPS, Domain und DB-Backups |
+| Language | **Python 3.14** (`python:3.14-slim`) | |
+| Package management | **Poetry 2.x** + `pyproject.toml` | Dependencies, lockfile (`poetry.lock`), virtual environment |
+| Framework | **Django 6.x** | Backend, ORM, admin, auth, templates |
+| Frontend | Django templates + **HTMX** | Dynamic interactions without page reloads, no separate JS frontend |
+| Styling | **Tailwind CSS** | Mobile-first layout |
+| PWA | Web app manifest + service worker | Home screen icon, full screen |
+| Database | **PostgreSQL 17** (`postgres:17-alpine`) | Incl. partial unique index and exclusion constraints (`btree_gist`) for business rules |
+| App server | **Gunicorn** | Production WSGI server in the container |
+| Static files | **WhiteNoise** | Serves CSS/JS directly from Django |
+| Export | `openpyxl` / CSV | Excel export of the number of attendances |
+| Password hashing | Argon2 (`argon2-cffi`) | Django's PBKDF2 as fallback |
+| Rate limiting | `django-axes` / `django-ratelimit` | Protects login and password reset |
+| Type checking | **mypy** + `django-stubs` | Static checks of the code |
+| Deployment | **Docker Compose → Coolify** | Coolify handles HTTPS, domain and DB backups |
 
-## Authentifizierung
+## Authentication
 
-- E-Mail/Passwort-Login mit **Django-Sessions** (HttpOnly- und Secure-Cookie, serverseitig in Postgres gespeichert)
-- Lange Sessions (z. B. 1 Jahr, verlängert bei Aktivität)
-- Logout beendet das aktuelle Gerät. Eine Passwortänderung beendet alle anderen Sessions. Deaktivierte Personen verlieren den Zugriff sofort.
-- **Registrierung nur per Einladungslink:** Der Administrator erstellt einen Einmal-Token, die Person registriert sich selbst und wird mit ihrer Person verknüpft.
-- **«Passwort vergessen?»:** Einmal-Link mit 1 h Gültigkeit über den eigenen SMTP-Server. Die Antwort ist generisch (keine Account-Enumeration) und rate-limited.
+- Email/password login with **Django sessions** (HttpOnly and Secure cookie, stored server-side in Postgres)
+- Long sessions (1 year, extended on activity)
+- Logout ends the current device. A password change ends all other sessions. Deactivated persons lose access immediately.
+- **Registration only via invitation link:** the administrator creates a one-time token, the person registers themselves and is linked to their person record.
+- **"Forgot password?":** one-time link valid for 1 h via the club's own SMTP server. The response is generic (no account enumeration) and rate-limited.
 
-## Rollen und Berechtigungen
+## Roles and permissions
 
-Eine Person kann mehrere Rollen gleichzeitig haben. Ein Riegenleiter kann z. B. in anderen Riegen, die er nicht leitet, als Hauptleiter oder Hilfsleiter eingeteilt sein.
+A person can have several roles at the same time. A squad leader can, for example, be assigned as head or assistant leader in other squads they do not lead.
 
-| Rolle | Wie entsteht sie? | Rechte |
+| Role | How is it granted? | Permissions |
 |---|---|---|
-| **Administrator** | Flag am Login-Account, **global** über alle Vereine | Hat immer alle Rechte. Pflegt Vereine, Riegen, Personen und Riegenleitungen. Erstellt Einladungslinks. |
-| **Riegenleiter** | Gültige `Riegenleitung` (Person ↔ Riege, 1..n Riegen) | Für **seine** Riegen: Hauptleiter und Hilfsleiter zuteilen oder entfernen (durch Setzen von «gültig bis»), alle Einsätze ansehen, Einsätze für die zugeteilten Leiter erfassen, ändern oder löschen (**bis 30 Tage in die Vergangenheit**) |
-| **Leiter** (Hauptleiter oder Hilfsleiter) | Gültige `Riegenzuteilung` am Einsatztag | **Eigene** Einsätze erfassen, aber nur für Riegen und Tage, an denen er zugeteilt ist. Eigene Einsätze ansehen. Eigene Einsätze **bis 30 Tage in die Vergangenheit** erfassen, ändern oder löschen. |
+| **Administrator** | Flag on the login account, **global** across all clubs | Always has all permissions. Maintains clubs, squads, persons and squad leaderships. Creates invitation links. |
+| **Squad leader** (Riegenleiter) | Valid `SquadLeadership` (person ↔ squad, 1..n squads) | For **their** squads: assign or remove head and assistant leaders (by setting "valid until"), view all attendances, record, change or delete attendances for the assigned leaders (**up to 30 days back**) |
+| **Leader** (head or assistant leader) | Valid `SquadAssignment` on the day | Record **their own** attendances, only for squads and days they are assigned to. View their own attendances. Record, change or delete their own attendances **up to 30 days back**. |
 
-Berechtigungen werden objektbezogen geprüft, also pro Riege und Person, nicht nur pro Rolle. Die Prüfung erfolgt serverseitig in jeder View. Ein Leiter sieht im UI nur die Riegen, für die er zum jeweiligen Datum zugeteilt ist.
+Permissions are checked per object, i.e. per squad and person, not just per role, and always on the server in every view. A leader only sees the squads they are assigned to on the selected date.
 
-## Fachliche Anforderungen
+## Business requirements
 
-- Leiter erfassen ihre Einsätze fortlaufend, mit Login und nur für die eigenen Riegen.
-- Die Erfassung muss schnell gehen: Das Datum ist frei wählbar (Vorschlag: heute, keine Daten in der Zukunft, höchstens 30 Tage zurück), es gibt keine festen Trainingstage und keine Terminvorlagen.
-- **Pro Riege, Person und Tag gibt es genau einen Eintrag.**
-- Eine Person kann in mehreren Riegen leiten.
-- Eine Person hat pro Riege zu einem Zeitpunkt genau eine Funktion: **Hauptleiter** oder **Hilfsleiter**.
-- **Pro Riege und Datum höchstens ein Hauptleiter.**
-- Es werden **keine Vergütungen** berechnet. Ausgewertet wird die **Anzahl Einsätze**.
-- Export pro Zeitraum: Anzahl Einsätze pro Person, Riege und Funktion.
+- Leaders record their attendances continuously, logged in and only for their own squads.
+- Recording must be quick: the date can be chosen freely (default: today, no dates in the future, at most 30 days back); there are no fixed training days and no schedule templates.
+- **There is exactly one entry per squad, person and day.**
+- A person can lead in several squads.
+- At any point in time, a person has exactly one role per squad: **head leader** (Hauptleiter) or **assistant leader** (Hilfsleiter).
+- **At most one head leader per squad and date.**
+- **No compensation** is calculated. What is reported is the **number of attendances**.
+- Export per period: number of attendances per person, squad and role.
 
-## Datenmodell
+## Data model
 
-### Entitäten
+### Entities
 
 ```
-Verein ──< Riege
-   │         │
-   │         ├──< Riegenleitung >──── Person   (Rolle Riegenleiter, gültig ab/bis)
-   │         │
-   │         ├──< Riegenzuteilung >── Person   (Hauptleiter | Hilfsleiter, gültig ab/bis)
-   │         │
-   │         └──< Einsatz >────────── Person   (Datum)
-   │
-   └──< Person
+Club ──< Squad
+  │        │
+  │        ├──< SquadLeadership >── Person   (squad leader role, valid from/until)
+  │        │
+  │        ├──< SquadAssignment >── Person   (head | assistant leader, valid from/until)
+  │        │
+  │        └──< Attendance >─────── Person   (date)
+  │
+  └──< Person
 ```
 
-| Entität | Attribute |
+| Entity (German UI term) | Attributes |
 |---|---|
-| **Verein** | Name |
-| **Riege** | Name, Verein (FK) |
-| **Person** | Name, Vorname, E-Mail (Pflicht, eindeutig), Jahrgang, Aktiv (ja/nein), Verein (FK) |
-| **Riegenleitung** | Person (FK), Riege (FK), gültig ab, gültig bis (leer = offen) |
-| **Riegenzuteilung** | Person (FK), Riege (FK), Funktion (`HAUPTLEITER` / `HILFSLEITER`), gültig ab, gültig bis (leer = offen) |
-| **Einsatz** | Person (FK), Riege (FK), Datum, Funktion (wird beim Speichern aus der gültigen Zuteilung übernommen) |
+| **Club** (Verein) | name |
+| **Squad** (Riege) | name, club (FK) |
+| **Person** | last name, first name, email (required, unique), birth year, active (yes/no), club (FK) |
+| **SquadLeadership** (Riegenleitung) | person (FK), squad (FK), valid from, valid until (empty = open) |
+| **SquadAssignment** (Riegenzuteilung) | person (FK), squad (FK), role (`HEAD_LEADER` / `ASSISTANT_LEADER`), valid from, valid until (empty = open) |
+| **Attendance** (Einsatz) | person (FK), squad (FK), date, role (taken from the valid assignment on save) |
+| **User** (Benutzer) | login account: email as username, password hash, 1:1 with a person. Deactivating the person also locks the login and ends all sessions. |
+| **Invitation** (Einladung) | token (hashed), expiry, used at, linked person |
 
-Personenbezogen werden **nur** Name, Vorname, E-Mail, Jahrgang und Aktiv gespeichert.
+Every table also records **when and by whom** a row was created and last changed
+(`created_at`, `created_by`, `updated_at`, `updated_by`). On creation, the "changed" values equal
+the "created" values.
 
-### Regeln und ihre Durchsetzung
+Of personal data, **only** last name, first name, email, birth year and active are stored.
 
-| # | Regel | Umsetzung |
-|---|---|---|
-| R1 | Eine Riege gehört genau zu einem Verein. | `NOT NULL` FK |
-| R2 | Eine Person gehört genau zu einem Verein. | `NOT NULL` FK |
-| R3 | Die E-Mail ist Pflicht und eindeutig, weil sie als Login dient. | `NOT NULL` und `UNIQUE` (case-insensitive) |
-| R4 | Eine Person hat 0..n Riegenzuteilungen, auch zu mehreren Riegen. | 1:n-Beziehung |
-| R5 | Pro Person und Riege höchstens eine gültige Zuteilung zu einem Zeitpunkt (keine überlappenden Zeiträume). | **Exclusion Constraint**: `EXCLUDE USING gist (person WITH =, riege WITH =, daterange(gueltig_ab, gueltig_bis, '[]') WITH &&)` |
-| R6 | Pro Person und Riege höchstens eine gültige Riegenleitung zu einem Zeitpunkt. | Exclusion Constraint wie R5 |
-| R7 | `gültig bis` ≥ `gültig ab` (Zuteilung und Riegenleitung) | `CheckConstraint` |
-| R8 | Person und Riege gehören zum selben Verein (Zuteilung, Riegenleitung, Einsatz). | Validierung im Model (`clean()`) und zusätzlich DB-Trigger |
-| R9 | Ein Einsatz ist nur möglich, wenn die Person am Datum der Riege zugeteilt ist. | Validierung im Model (`clean()`) und zusätzlich DB-Trigger. Die Funktion wird dabei aus der Zuteilung übernommen. |
-| R10 | Pro Person, Riege und Datum höchstens ein Einsatz. | `UniqueConstraint(person, riege, datum)` |
-| R11 | Pro Riege und Datum höchstens ein Hauptleiter. | **Partial Unique Index** `(riege, datum) WHERE funktion = 'HAUPTLEITER'` |
-| R12 | Leiter und Riegenleiter dürfen Einsätze nur bis 30 Tage in die Vergangenheit erfassen, ändern oder löschen. | Berechtigungsprüfung in der View (`datum >= heute − 30 Tage`). Administratoren sind davon ausgenommen. |
-| R13 | Einsätze in der Zukunft sind nicht erlaubt (gilt für alle, auch Administratoren). | Validierung im Model (`datum <= heute`, Zeitzone Europe/Zurich). Im Formular ist `max` auf heute gesetzt. |
+### Business rules
 
-R8 und R9 betreffen mehrere Tabellen und lassen sich nicht als einfache Constraint ausdrücken. Sie werden deshalb in Django validiert und über Trigger zusätzlich in der DB abgesichert.
+| # | Rule |
+|---|---|
+| R1 | A squad belongs to exactly one club. |
+| R2 | A person belongs to exactly one club. |
+| R3 | The email is required and unique (case-insensitive), because it is the login. |
+| R4 | A person has 0..n squad assignments, also to several squads. |
+| R5 | Per person and squad at most one valid assignment at a time (no overlapping periods). |
+| R6 | Per person and squad at most one valid squad leadership at a time. |
+| R7 | "valid until" ≥ "valid from" (assignment and squad leadership). |
+| R8 | Person and squad belong to the same club (assignment, squad leadership, attendance). |
+| R9 | An attendance is only possible if the person is assigned to the squad on that date. The role is taken from the assignment. |
+| R10 | Per person, squad and date at most one attendance. |
+| R11 | Per squad and date at most one head leader. |
+| R12 | Leaders and squad leaders may record, change or delete attendances only up to 30 days back. Administrators are exempt. |
+| R13 | Attendances in the future are not allowed (for everyone, including administrators; time zone Europe/Zurich). |
 
-### Technische Ergänzungen
-
-- `User` (Login-Account, Django-Auth): Passwort-Hash und Login-Daten, 1:1 mit einer `Person` verknüpft, verwendet deren E-Mail als Benutzernamen. Wird eine Person auf «inaktiv» gesetzt, ist auch ihr Login gesperrt, und alle Sessions werden beendet.
-- `Einladung`: Token (gehasht), Ablaufdatum, benutzt am, verknüpfte Person
-
-## Architektur
+## Architecture
 
 ```
-Browser/Handy → Coolify (Traefik, HTTPS) → Gunicorn → Django → PostgreSQL
+Browser/phone → Coolify (Traefik, HTTPS) → Gunicorn → Django → PostgreSQL
 ```
 
-Ein App-Container und ein Postgres-Container, definiert in `docker-compose.yml`.
+One app container and one Postgres container, defined in `docker-compose.yml`.
 
-## Entwicklung
+## Development
+
+### Locally with Docker (recommended)
 
 ```bash
-poetry install                     # Abhängigkeiten inkl. Dev-Tools installieren
+docker compose up -d --build                         # start app + Postgres (http://localhost:8000)
+docker compose exec web python manage.py seed_demo   # create demo data and logins
+docker compose run --rm web python manage.py test    # run the tests against Postgres
+docker compose exec web python manage.py createsuperuser
+docker compose down                                  # stop (data is kept; add -v to delete it)
+```
+
+Demo logins (password `demo1234!`): `admin@example.ch` (administrator), `anna.muster@example.ch`
+(squad leader Jugi), `beat.keller@example.ch`, `carla.meier@example.ch`, `dario.frei@example.ch`.
+
+Without `EMAIL_HOST`, mails (password reset) are written to the container log (`docker compose logs web`).
+The administrator creates invitation links under *Admin → Einladungen*. The link is shown only once.
+
+### Locally without Docker
+
+```bash
+poetry install                     # install dependencies incl. dev tools
 poetry run python manage.py migrate
 poetry run python manage.py runserver
 ```
 
-Im Docker-Image werden nur die Produktionsabhängigkeiten installiert (`poetry install --only main --no-root`), und zwar in einem Multi-Stage-Build, damit Poetry selbst nicht im finalen Image landet.
+### Type checking with mypy
 
-## Konfiguration (Umgebungsvariablen)
+```bash
+DJANGO_SECRET_KEY=mypy poetry run mypy .          # bash
+$env:DJANGO_SECRET_KEY="mypy"; poetry run mypy .  # PowerShell
+```
 
-| Variable | Beschreibung |
+## Configuration (environment variables)
+
+| Variable | Description |
 |---|---|
-| `DJANGO_SECRET_KEY` | Geheimer Schlüssel |
+| `DJANGO_SECRET_KEY` | Secret key |
+| `DJANGO_DEBUG` | `true` for development (default `false`) |
 | `DJANGO_ALLOWED_HOSTS` | Domain(s) |
-| `DATABASE_URL` | z. B. `postgres://user:pass@db:5432/training` |
-| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` | SMTP für den Passwort-Reset |
-| `DEFAULT_FROM_EMAIL` | Absenderadresse |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | Origins for CSRF, e.g. `https://training.example.ch` |
+| `DJANGO_SECURE_COOKIES` | `false` only locally without HTTPS (default: on unless `DJANGO_DEBUG`) |
+| `DATABASE_URL` | e.g. `postgres://user:pass@db:5432/training` |
+| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` | SMTP for the password reset |
+| `DEFAULT_FROM_EMAIL` | Sender address |
 
-## Nicht im Scope (vorerst)
+## Out of scope (for now)
 
-- Vergütungsberechnung (es wird nur die Anzahl Einsätze ausgewertet)
-- Feste Trainingstage und Terminvorlagen
-- Administratoren pro Verein (vorerst nur global)
-- Offline-Erfassung
-- Native Apps / JWT-API (bei Bedarf später via `djangorestframework-simplejwt` nachrüstbar)
+- Compensation calculation (only the number of attendances is reported)
+- Fixed training days and schedule templates
+- Administrators per club (global only for now)
+- Offline recording
+- Native apps / JWT API (can be added later via `djangorestframework-simplejwt`)

@@ -1,0 +1,7 @@
+{% extends "includes/_card_form.html" %}
+{% block title %}Anmelden{% endblock %}
+{% block heading %}Anmelden{% endblock %}
+{% block button %}Anmelden{% endblock %}
+{% block after %}
+<p class="mt-4 text-center text-sm"><a href="{% url 'password_reset' %}" class="text-svf hover:underline">Passwort vergessen?</a></p>
+{% endblock %}

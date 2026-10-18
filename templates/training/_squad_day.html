@@ -1,0 +1,13 @@
+<section id="day">
+  {% if not date_allowed %}
+  <p class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">Für dieses Datum können keine Einsätze erfasst werden.</p>
+  {% endif %}
+  <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-svf">{{ date|date:"l, j. F Y" }}</h2>
+  {% if rows %}
+  <ul class="space-y-2">
+    {% for row in rows %}{% include "training/_attendance_row.html" with mode="person" %}{% endfor %}
+  </ul>
+  {% else %}
+  <p class="rounded-xl bg-white p-4 text-sm text-gray-500 shadow-sm">An diesem Datum sind keine Leiter zugeteilt.</p>
+  {% endif %}
+</section>

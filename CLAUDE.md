@@ -56,3 +56,57 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Simplicity First:** Make every change as simple as possible. Impact minimal code.
 - **No Laziness:** Find root causes. No temporary fixes. Senior developer standards.
 - **Minimal Impact:** Only touch what's necessary. No side effects with new bugs.
+
+## Project: Trainingserfassung
+
+Django 6 app (Python 3.14, Postgres 17, HTMX, Tailwind via CDN). See README.md for the domain,
+roles and business rules R1–R13.
+
+### Commands
+
+```bash
+docker compose up -d --build                         # app + Postgres on http://localhost:8000
+docker compose exec web python manage.py seed_demo   # demo data, password demo1234!
+docker compose run --rm web python manage.py test    # tests need Postgres (constraints, triggers)
+DJANGO_SECRET_KEY=mypy .venv/Scripts/mypy .          # type check (django-stubs loads the settings)
+.venv/Scripts/ruff check .                           # lint (RUF012 on Django Meta/admin lists is known noise)
+```
+
+- The Docker image contains only production dependencies; mypy/ruff run from the local `.venv`
+  (`poetry install`). Poetry is not installed globally on this machine.
+- New migrations: generate them in the container with the code mounted, e.g.
+  `docker compose run --rm --no-deps --entrypoint "" -v "<repo>:/src" -w /src -e DJANGO_SECRET_KEY=x web python manage.py makemigrations`
+  (mounting onto `/app` would hide the image's `.venv`).
+
+### Conventions
+
+- **Code is English** (identifiers, comments, docstrings, URL paths, DB schema).
+  **Everything the user sees is German** (verbose names, labels, messages, template text, export headers).
+  Glossary: Verein=`Club`, Riege=`Squad`, Riegenleitung=`SquadLeadership`, Riegenzuteilung=`SquadAssignment`,
+  Einsatz=`Attendance`, Funktion=`Role` (`HEAD_LEADER`/`ASSISTANT_LEADER`), Einladung=`Invitation`.
+- Every model inherits `accounts.audit.AuditedModel` (`created_at/by`, `updated_at/by`). The acting user
+  comes from `CurrentUserMiddleware` (contextvar); outside requests it is `None`. Do not set these fields
+  by hand. `QuerySet.update()`/`bulk_create()` bypass `save()` and therefore the audit fields; avoid them.
+  Admin classes use `AuditedAdmin` / `AuditedAdminMixin`.
+- Permissions are object-level and live in `training/permissions.py`; every view checks through them.
+- Dates are local (`training.models.today()`, Europe/Zurich).
+
+### How the business rules are enforced
+
+| Rule | Enforcement |
+|---|---|
+| R1, R2 | `NOT NULL` FK |
+| R3 | `UniqueConstraint(Lower("email"))` on `Person` and `User`; login looks up `email__iexact` |
+| R5, R6 | `ExclusionConstraint` (`btree_gist`): person =, squad =, `daterange(valid_from, valid_until, '[]')` && |
+| R7 | `CheckConstraint` |
+| R8 | `SameClubMixin.clean()` + DB trigger `training_check_same_club` |
+| R9 | `Attendance.clean()` + DB trigger `training_attendance_assignment` (also sets `role`) |
+| R10 | `UniqueConstraint(person, squad, date)` |
+| R11 | partial unique index `(squad, date) WHERE role = 'HEAD_LEADER'` |
+| R12 | `permissions.date_allowed()` in the views (admins exempt) |
+| R13 | `Attendance.clean()`; date inputs have `max` = today |
+
+- Triggers live in `training/migrations/0002_triggers.py` (raw SQL); keep them in sync with table/column names.
+- `SquadAssignment.clean()` additionally prevents shortening an assignment so that recorded attendances
+  would fall outside it (R9 after the fact).
+- A role change of an assignment does not change already recorded attendances.

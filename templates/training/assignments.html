@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Leiter {{ squad }}{% endblock %}
+{% block content %}
+<a href="{% url 'squad_day' squad.pk %}" class="text-sm text-svf hover:underline">‹ {{ squad }}</a>
+<h1 class="mb-4 text-2xl font-bold text-svf-dark">Leiter von {{ squad }}</h1>
+
+<ul class="mb-8 space-y-2">
+  {% for assignment in assignments %}
+  <li class="rounded-xl bg-white p-4 shadow-sm">
+    <p class="font-medium">{{ assignment.person }}</p>
+    <p class="text-sm text-gray-500">{{ assignment.get_role_display }} · ab {{ assignment.valid_from|date:"d.m.Y" }}{% if assignment.valid_until %} bis {{ assignment.valid_until|date:"d.m.Y" }}{% endif %}</p>
+    <form method="post" class="form-svf mt-3 flex items-end gap-2">{% csrf_token %}
+      <input type="hidden" name="end" value="{{ assignment.pk }}">
+      <div class="flex-1">
+        <label class="mb-1 block text-xs text-gray-500" for="until-{{ assignment.pk }}">Gültig bis</label>
+        <input type="date" id="until-{{ assignment.pk }}" name="valid_until" value="{{ assignment.valid_until|default:today|date:'Y-m-d' }}" min="{{ assignment.valid_from|date:'Y-m-d' }}" required>
+      </div>
+      <button class="rounded-lg border-2 border-svf px-4 py-2 text-sm font-medium text-svf hover:bg-svf-pale">Beenden</button>
+    </form>
+  </li>
+  {% empty %}
+  <li class="rounded-xl bg-white p-4 text-sm text-gray-500 shadow-sm">Noch keine Leiter zugeteilt.</li>
+  {% endfor %}
+</ul>
+
+<div class="rounded-xl bg-white p-6 shadow-sm">
+  <h2 class="mb-4 text-lg font-bold text-svf-dark">Leiter zuteilen</h2>
+  <form method="post" class="form-svf">{% csrf_token %}
+    {% include "includes/_form.html" %}
+    <button class="w-full rounded-lg bg-svf px-4 py-3 font-medium text-white hover:bg-svf-dark">Zuteilen</button>
+  </form>
+</div>
+{% endblock %}

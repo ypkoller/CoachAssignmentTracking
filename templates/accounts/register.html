@@ -1,0 +1,5 @@
+{% extends "includes/_card_form.html" %}
+{% block title %}Registrieren{% endblock %}
+{% block heading %}Willkommen, {{ person.first_name }}!{% endblock %}
+{% block intro %}<p class="mb-4 text-sm text-gray-600">Lege ein Passwort für dein Konto <strong>{{ person.email }}</strong> fest.</p>{% endblock %}
+{% block button %}Konto einrichten{% endblock %}

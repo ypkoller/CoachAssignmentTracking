@@ -1,0 +1,32 @@
+<section id="day">
+  {% if not date_allowed %}
+  <p class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">Für dieses Datum kannst du keine Einsätze erfassen (keine Daten in der Zukunft, höchstens 30 Tage zurück).</p>
+  {% endif %}
+
+  <h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-svf">Meine Einsätze am {{ date|date:"l, j. F Y" }}</h2>
+  {% if rows %}
+  <ul class="space-y-2">
+    {% for row in rows %}{% include "training/_attendance_row.html" with mode="squad" %}{% endfor %}
+  </ul>
+  {% else %}
+  <p class="rounded-xl bg-white p-4 text-sm text-gray-500 shadow-sm">Du bist an diesem Datum keiner Riege zugeteilt.</p>
+  {% endif %}
+
+  {% if led_squads %}
+  <h2 class="mb-2 mt-8 text-sm font-semibold uppercase tracking-wide text-svf">Meine Riegen als Riegenleiter</h2>
+  <ul class="space-y-2">
+    {% for squad in led_squads %}
+    <li class="flex items-center justify-between gap-3 rounded-xl bg-white p-4 shadow-sm">
+      <a href="{% url 'squad_day' squad.pk %}?date={{ date|date:'Y-m-d' }}" class="min-w-0 flex-1">
+        <p class="truncate font-medium">{{ squad }}</p>
+        <p class="text-sm text-gray-500">{{ squad.club }}</p>
+      </a>
+      <div class="flex shrink-0 gap-2 text-sm">
+        <a href="{% url 'squad_day' squad.pk %}?date={{ date|date:'Y-m-d' }}" class="rounded-full bg-svf px-4 py-2 font-medium text-white hover:bg-svf-dark">Einsätze</a>
+        <a href="{% url 'assignments' squad.pk %}" class="rounded-full border-2 border-svf px-4 py-2 font-medium text-svf hover:bg-svf-pale">Leiter</a>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
