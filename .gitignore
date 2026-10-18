@@ -5,3 +5,4 @@ __pycache__/
 staticfiles/
 .idea/
 docker-compose.override.yml
+static/css/

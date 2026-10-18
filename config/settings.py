@@ -44,6 +44,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # First: answers /health/ before the host check and without session/auth.
+    "config.health.HealthCheckMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -117,6 +119,8 @@ AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 1  # hours
 AXES_USERNAME_FORM_FIELD = "username"
 AXES_LOCKOUT_PARAMETERS = ["ip_address", "username"]
+AXES_CLIENT_IP_CALLABLE = "config.client_ip.client_ip"
+RATELIMIT_IP_META_KEY = "config.client_ip.client_ip"
 
 INVITATION_VALID_DAYS = 14
 
@@ -131,6 +135,12 @@ SESSION_COOKIE_SECURE = SECURE_COOKIES
 CSRF_COOKIE_SECURE = SECURE_COOKIES
 # Coolify/Traefik terminates HTTPS.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+# Number of trusted reverse proxies in front of the app (Coolify: 1, Traefik). With 0,
+# X-Forwarded-For is ignored, so clients cannot spoof their IP when accessing directly.
+PROXY_COUNT = int(os.environ.get("DJANGO_PROXY_COUNT", "0"))
+# HSTS only once HTTPS works on the domain; the HTTP→HTTPS redirect is done by Traefik.
+SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_HSTS_SECONDS", "0"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True  # only effective with SECURE_HSTS_SECONDS > 0
 
 # --- Localization ------------------------------------------------------------
 
@@ -159,7 +169,9 @@ if EMAIL_HOST:
     EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
     EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
     EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
-    EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+    # SSL (usually port 465) or STARTTLS (usually port 587), not both.
+    EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", False)
+    EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", not EMAIL_USE_SSL)
 else:
     # Without an SMTP server, mails go to the container log.
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
@@ -174,4 +186,8 @@ LOGGING = {
 
 # The email is unique via a case-insensitive unique index (Lower("email")), which the
 # check does not recognize. The login looks up users with `email__iexact`.
-SILENCED_SYSTEM_CHECKS = ["auth.W004"]
+#
+# security.W008 (SECURE_SSL_REDIRECT): Traefik redirects HTTP to HTTPS; a redirect in Django
+# would also break the plain-HTTP container healthcheck.
+# security.W021 (SECURE_HSTS_PRELOAD): deliberately off; the preload list is practically irreversible.
+SILENCED_SYSTEM_CHECKS = ["auth.W004", "security.W008", "security.W021"]

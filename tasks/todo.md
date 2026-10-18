@@ -31,7 +31,7 @@
 
 ## Offen / nächste Schritte
 
-- Tailwind und HTMX kommen noch per CDN → Tailwind-Build ins Docker-Image, HTMX lokal ausliefern
+- ~~Tailwind und HTMX kommen noch per CDN~~ → erledigt im Branch `coolify-deployment`
 - Funktionswechsel einer Zuteilung ändert bereits erfasste Einsätze nicht (Funktion zum Erfassungszeitpunkt bleibt)
 - Ansicht im Browser auf dem Handy prüfen (bisher nur per HTTP getestet)
 - Coolify-Deployment (HTTPS, `DJANGO_SECURE_COOKIES` weglassen → Secure-Cookies aktiv)
@@ -98,3 +98,66 @@ Entscheide: alles inkl. Datenmodell übersetzen · Audit-FK auf `accounts.User` 
 - Beim Erzeugen ist `updated_at == created_at` (ein Zeitstempel) und `updated_by == created_by`
 - Ohne Request (seed_demo, Shell) bleiben `created_by`/`updated_by` leer; die Selbstregistrierung ebenso
 - Ruff: nur die bekannten RUF012-Hinweise (Django-Meta/Admin-Listen)
+
+# Coolify-Deployment – Branch `coolify-deployment`
+
+Entscheide: App per **Dockerfile-Build-Pack**, Postgres als **eigene Coolify-Ressource** (mit Backups),
+`docker-compose.yml` bleibt nur für lokal · Tailwind/HTMX werden **lokal ausgeliefert**.
+
+## Gefundene Probleme für den Betrieb hinter dem Proxy
+
+- **Login-Sperre trifft alle:** axes und django-ratelimit sehen hinter Traefik nur die Proxy-IP.
+  5 Fehlversuche irgendeiner Person sperren alle für 1 h, das Passwort-Reset-Limit gilt global.
+- `check --deploy`: HSTS nicht gesetzt (W004), kein SSL-Redirect in Django (W008, macht Traefik).
+- Kein Healthcheck: Coolify kann nicht erkennen, ob ein neues Deployment bereit ist (Zero-Downtime).
+- Tailwind-CDN ist laut Tailwind nicht für Produktion gedacht; Google Fonts lädt von Google (Datenschutz).
+
+## Schritte
+
+- [x] 1. Client-IP hinter dem Proxy: axes (`AXES_IPWARE_*`) und ratelimit (`RATELIMIT_IP_META_KEY`) auf
+      `X-Forwarded-For` mit Proxy-Anzahl aus Env (`DJANGO_PROXY_COUNT`, Default 1); Tests dazu
+- [x] 2. Security-Settings per Env: `DJANGO_HSTS_SECONDS` (Default 0, in Produktion z.B. 31536000);
+      SSL-Redirect bleibt bei Traefik (W008 mit Begründung stummschalten)
+- [x] 3. Healthcheck `/health/` (prüft DB-Verbindung) als Middleware vor dem Host-Check, damit er auch
+      mit `Host: localhost` funktioniert; `curl` ins Image, `HEALTHCHECK` im Dockerfile; Test dazu
+- [x] 4. Gunicorn: Worker-Anzahl über `WEB_CONCURRENCY` (Default 3), Timeout, Logs auf stdout
+- [x] 5. Frontend lokal: Tailwind-Standalone-CLI im Docker-Build (gleiche Version 3.4.x, Konfiguration mit
+      SVF-Farben aus `base.html`), HTMX 2.0.4 und Roboto-Schrift unter `static/`; CDN-Links entfernen
+- [x] 6. Lokales Compose an das neue Image anpassen (weiterhin `docker compose up` für Entwicklung)
+- [x] 7. Doku: README-Abschnitt «Deployment (Coolify)» mit Schritt-für-Schritt-Anleitung und Env-Tabelle,
+      CLAUDE.md ergänzen
+- [x] 8. Verifikation: Tests, mypy, `check --deploy` ohne Warnungen, Image mit Produktions-Env lokal starten,
+      Healthcheck, UI ohne CDN im Browser/HTTP prüfen
+- [ ] 9. Nach Freigabe: in Coolify einrichten (durch dich, mit Anleitung) → erstes Deployment →
+      `createsuperuser` im Coolify-Terminal → Login und Erfassen auf der echten Domain testen
+
+## Benötigte Angaben
+
+1. Domain (z.B. `training.svfislisbach.ch`) – zeigt der DNS-Eintrag schon auf den Coolify-Server?
+2. Coolify: Version (v4?), ist Server/Projekt eingerichtet? Ist das GitHub-Repo privat (dann GitHub App oder Deploy Key)?
+3. Welcher Branch wird deployed (Empfehlung: `master` nach Merge) und Auto-Deploy bei Push ja/nein?
+4. SMTP für den Passwort-Reset: Host, Port, TLS/SSL, Benutzer, Absenderadresse
+   (Passwort **nicht** mir schicken, sondern direkt in Coolify eintragen)
+5. Backups der DB: nur lokal auf dem Server oder auf S3? Gewünschter Rhythmus (Empfehlung: täglich)?
+6. E-Mail für den ersten Administrator
+7. Läuft vor Coolify noch ein weiterer Proxy (z.B. Cloudflare)? Wichtig für die Client-IP
+8. Startdaten: werden Verein, Riegen und Personen von Hand im Admin erfasst, oder gibt es eine Liste zum Import?
+
+### Antworten (2026-10-18)
+
+Domain `training-svfislisbach.duckdns.org` (Server/Coolify v4 noch in Einrichtung) · Repo privat (GitHub App) ·
+Auto-Deploy nur `master` · SMTP folgt später · Backups täglich nur auf dem Server · erster Admin per
+`createsuperuser` (E-Mail nicht im Repo) · kein weiterer Proxy vor Coolify (Proxy-Anzahl 1) · Startdaten von Hand
+
+## Review
+
+- Client-IP über `config.client_ip` (rechter Eintrag von `X-Forwarded-For`, Proxy-Anzahl aus Env, Default 0);
+  axes und ratelimit nutzen beide diese Funktion. Test: Sperre gilt nur noch für den betroffenen Client.
+- `/health/` per Middleware (vor dem Host-Check), prüft die DB; Docker-`HEALTHCHECK` mit `curl`
+- HSTS per `DJANGO_HSTS_SECONDS`, `includeSubDomains`; W008 (Redirect macht Traefik) und W021 (kein Preload) begründet stummgeschaltet
+  → `check --deploy` mit Produktions-Env: keine Befunde
+- Tailwind 3.4.16 Standalone-CLI im Docker-Build (Version + sha256 gepinnt, amd64/arm64), HTMX 2.0.4 (gleicher
+  Hash wie vorher) und Roboto lokal → keine externen Quellen mehr
+- Zusätzlich: `EMAIL_USE_SSL` für SMTP über Port 465 (z.B. Bluewin)
+- 44 Tests grün, mypy ohne Befunde, Healthcheck «healthy», Seiten nach Login per HTTP geprüft
+- Offen: Schritt 9 (Coolify einrichten) sobald der Server bereit ist; SMTP-Zugang

@@ -1,0 +1,33 @@
+/* Source for static/css/app.css (built with the Tailwind CLI, see Dockerfile). */
+
+@font-face {
+  font-family: "Roboto";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/roboto-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Roboto";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/roboto-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Roboto";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/roboto-latin-700-normal.woff2") format("woff2");
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .form-svf input:not([type=checkbox]), .form-svf select {
+    @apply w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 focus:border-svf-accent focus:outline-none focus:ring-2 focus:ring-svf-light;
+  }
+}

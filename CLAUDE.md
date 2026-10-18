@@ -59,7 +59,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project: Trainingserfassung
 
-Django 6 app (Python 3.14, Postgres 17, HTMX, Tailwind via CDN). See README.md for the domain,
+Django 6 app (Python 3.14, Postgres 17, HTMX, Tailwind built locally). See README.md for the domain,
 roles and business rules R1–R13.
 
 ### Commands
@@ -90,6 +90,14 @@ DJANGO_SECRET_KEY=mypy .venv/Scripts/mypy .          # type check (django-stubs 
   Admin classes use `AuditedAdmin` / `AuditedAdminMixin`.
 - Permissions are object-level and live in `training/permissions.py`; every view checks through them.
 - Dates are local (`training.models.today()`, Europe/Zurich).
+- Frontend assets are local: Tailwind is built in the Docker `assets` stage from `frontend/`
+  (`static/css/` is generated, not committed); HTMX and Roboto live in `static/`. The Tailwind CLI is
+  pinned by version and sha256 in the Dockerfile; update both together. No CDNs.
+- Client IP for axes and ratelimit comes from `config.client_ip.client_ip` (`DJANGO_PROXY_COUNT`;
+  production behind Coolify/Traefik = 1). Never read `REMOTE_ADDR` or `X-Forwarded-For` directly.
+- `/health/` is answered by `config.health.HealthCheckMiddleware` (first middleware, before the host
+  check); used by the Docker `HEALTHCHECK` and Coolify.
+- Deployment: Coolify v4, Dockerfile build pack, separate Coolify Postgres; see README "Deployment".
 
 ### How the business rules are enforced
 

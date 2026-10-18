@@ -6,3 +6,6 @@
 staticfiles
 tasks
 docker-compose.override.yml
+.mypy_cache
+.ruff_cache
+static/css
