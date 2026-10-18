@@ -1,0 +1,9 @@
+{% autoescape off %}Hallo {{ person.first_name }}
+
+Für dich wurde ein Konto in der Trainingserfassung angelegt. Lege über diesen Link dein Passwort fest:
+
+{{ url }}
+
+Der Link ist {{ valid_days }} Tage gültig und kann nur einmal verwendet werden.
+Dein Benutzername ist deine E-Mail-Adresse {{ person.email }}.
+{% endautoescape %}

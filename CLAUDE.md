@@ -88,6 +88,8 @@ DJANGO_SECRET_KEY=mypy .venv/Scripts/mypy .          # type check (django-stubs 
   comes from `CurrentUserMiddleware` (contextvar); outside requests it is `None`. Do not set these fields
   by hand. `QuerySet.update()`/`bulk_create()` bypass `save()` and therefore the audit fields; avoid them.
   Admin classes use `AuditedAdmin` / `AuditedAdminMixin`.
+- The admin creates logins and invitations through `accounts/invitations.py` (`invite`, `send_invitation`);
+  a login without a usable password counts as invited but not registered.
 - Permissions are object-level and live in `training/permissions.py`; every view checks through them.
 - Dates are local (`training.models.today()`, Europe/Zurich).
 - Frontend assets are local: Tailwind is built in the Docker `assets` stage from `frontend/`

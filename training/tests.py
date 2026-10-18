@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 
+from django.core import mail
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
@@ -334,3 +335,76 @@ class ViewsTest(Base):
         # One-time token: a second use fails.
         self.client.logout()
         self.assertEqual(self.client.get(url).status_code, 404)
+
+
+class PersonLoginAdminTest(Base):
+    add_url = reverse("admin:training_person_add")
+
+    def setUp(self):
+        self.client.force_login(self.admin)
+
+    def add_person(self, email="dora@example.ch", **extra):
+        data = {
+            "last_name": "Neu",
+            "first_name": "Dora",
+            "email": email,
+            "is_active": "on",
+            "club": self.club.pk,
+            "create_login": "on",
+            **extra,
+        }
+        return self.client.post(self.add_url, data, follow=True)
+
+    def invitation_link(self):
+        return mail.outbox[-1].body.split("http://testserver")[1].split()[0]
+
+    def test_create_login_sends_invitation(self):
+        response = self.add_person()
+        self.assertContains(response, "Einladungslinks")
+        user = User.objects.get(person__email="dora@example.ch")
+        self.assertFalse(user.has_usable_password())
+        self.assertEqual(mail.outbox[-1].to, ["dora@example.ch"])
+        response = self.client.post(self.invitation_link(), {"password1": PW, "password2": PW})
+        self.assertRedirects(response, reverse("record"))
+        user.refresh_from_db()
+        self.assertTrue(user.check_password(PW))
+
+    def test_create_login_with_start_password(self):
+        self.add_person(password=PW)
+        self.assertTrue(User.objects.get(person__email="dora@example.ch").check_password(PW))
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_weak_start_password_rejected(self):
+        response = self.add_person(password="1234")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Person.objects.filter(email="dora@example.ch").exists())
+
+    def test_email_used_by_other_login_rejected(self):
+        self.add_person(email="admin@example.ch")
+        self.assertFalse(Person.objects.filter(email="admin@example.ch").exists())
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_without_checkbox_no_login(self):
+        self.add_person(create_login="")
+        self.assertFalse(User.objects.filter(email="dora@example.ch").exists())
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_registered_person_has_no_login_fields(self):
+        response = self.client.get(reverse("admin:training_person_change", args=[self.anna.pk]))
+        self.assertContains(response, "registriert")
+        self.assertNotContains(response, 'name="create_login"')
+
+    def test_action_invites_only_unregistered_active_persons(self):
+        dora = Person.objects.create(first_name="Dora", last_name="Neu", email="dora@example.ch", club=self.club)
+        emil = Person.objects.create(
+            first_name="Emil", last_name="Alt", email="emil@example.ch", club=self.club, is_active=False
+        )
+        data = {"action": "invite_selected", "_selected_action": [dora.pk, emil.pk, self.anna.pk]}
+        response = self.client.post(reverse("admin:training_person_changelist"), data, follow=True)
+        self.assertContains(response, "Übersprungen")
+        self.assertEqual([m.to for m in mail.outbox], [["dora@example.ch"]])
+        self.assertFalse(User.objects.get(person=dora).has_usable_password())
+        self.assertFalse(User.objects.filter(person=emil).exists())
+        # Not yet registered: running it again issues a new invitation.
+        self.client.post(reverse("admin:training_person_changelist"), data)
+        self.assertEqual(len(mail.outbox), 2)

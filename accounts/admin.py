@@ -1,8 +1,8 @@
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.urls import reverse
 
 from .audit import AUDIT_FIELDS, AuditedAdmin, AuditedAdminMixin
+from .invitations import invitation_message, send_invitation
 from .models import Invitation, User
 
 
@@ -36,11 +36,7 @@ class InvitationAdmin(AuditedAdmin):
         return [*fields, "person"] if obj else fields
 
     def save_model(self, request, obj, form, change):
-        token = None if change else obj.generate_token()
-        super().save_model(request, obj, form, change)
-        if token:
-            url = request.build_absolute_uri(reverse("register", args=[token]))
-            messages.warning(
-                request,
-                f"Einladungslink für {obj.person} (wird nur jetzt angezeigt): {url}",
-            )
+        if change:
+            return super().save_model(request, obj, form, change)
+        url, sent = send_invitation(obj, request)
+        messages.warning(request, invitation_message([(obj.person, url, sent)]))

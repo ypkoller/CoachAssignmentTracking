@@ -128,7 +128,15 @@ Demo logins (password `demo1234!`): `admin@example.ch` (administrator), `anna.mu
 (squad leader Jugi), `beat.keller@example.ch`, `carla.meier@example.ch`, `dario.frei@example.ch`.
 
 Without `EMAIL_HOST`, mails (password reset) are written to the container log (`docker compose logs web`).
-The administrator creates invitation links under *Admin → Einladungen*. The link is shown only once.
+The administrator invites persons in the admin, in one of three ways:
+
+- When creating or editing a person: check *Login anlegen und Einladung senden*, optionally with a start
+  password (then the person can log in right away).
+- In the person list: select persons and run the action *Login anlegen und Einladung senden*. Inactive
+  and already registered persons are skipped; persons who have not registered yet get a new link.
+- Under *Admin → Einladungen*.
+
+The link is mailed to the person and shown to the administrator only once.
 
 ### Locally without Docker
 

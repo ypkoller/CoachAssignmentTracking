@@ -166,3 +166,38 @@ Auto-Deploy nur `master` · SMTP folgt später · Backups täglich nur auf dem S
   - Coolify fragt `/health` ohne Slash ab → Middleware akzeptiert beide (Test ergänzt, 45 Tests)
   - Coolify-Terminal braucht Ports 6001/6002 → Admin per SSH + `docker exec` angelegt
 - Offen: SMTP-Zugang; HSTS einschalten, wenn HTTPS einige Tage stabil läuft
+
+---
+
+# Benutzer beim Erfassen einer Person anlegen (Branch `person-user-account`)
+
+Antworten (2026-10-18): Einladungslink **und** optionales Startpasswort · zusätzlich Mehrfach-Aktion in der
+Personen-Liste · Link per E-Mail senden **und** im Admin anzeigen.
+
+## Plan
+
+- [x] 1. Service `accounts/invitations.py`: `invite(person, request, password=None) -> url`
+      – Login holen oder anlegen (E-Mail = Person, ohne Passwort bzw. mit Startpasswort), Einladung erzeugen,
+      Mail an die Person senden (Fehler beim Versand → Warnung, kein Abbruch), Link zurückgeben.
+      Alles in einer Transaktion.
+- [x] 2. Mail-Vorlagen `templates/accounts/email/invitation_subject.txt` / `invitation.txt` (deutsch,
+      mit Link und Gültigkeit in Tagen).
+- [x] 3. Personen-Formular im Admin: Abschnitt «Benutzer» mit Checkbox «Benutzer anlegen und einladen» und
+      «Startpasswort (optional)» (Django-Passwortregeln). Nur sichtbar, solange die Person noch keinen
+      Login hat; sonst ein Link auf den bestehenden Benutzer. Prüfung: E-Mail nicht schon von einem anderen
+      Login belegt, Person aktiv. Nach dem Speichern: Meldung mit Link (nur jetzt sichtbar).
+- [x] 4. Aktion in der Personen-Liste «Benutzer anlegen und einladen»: für alle markierten Personen;
+      übersprungen werden inaktive Personen und solche, die schon ein Passwort haben (bereits registriert).
+      Wer noch nicht registriert ist, erhält eine neue Einladung. Links gesammelt in einer Meldung.
+- [x] 5. `InvitationAdmin` nutzt denselben Service (dann wird auch dort gemailt).
+- [x] 6. Tests: Formular mit/ohne Passwort, E-Mail-Konflikt, Aktion (neu / bereits registriert / inaktiv),
+      Mail im `mail.outbox`, Registrierung über den erzeugten Link.
+- [x] 7. Verifikation: Tests, mypy, ruff, im Admin lokal durchklicken; README/CLAUDE.md kurz ergänzen.
+
+## Review
+
+- `accounts/invitations.py`: `invite()` legt den Login an (ohne Passwort oder mit Startpasswort), erzeugt die
+  Einladung und mailt sie; Versandfehler werden geloggt, der Link wird trotzdem angezeigt
+- Personen-Admin: Abschnitt «Login» (Status mit Link auf den Benutzer, Checkbox, Startpasswort mit
+  Passwortregeln), Spalte «registriert», Aktion für mehrere Personen; `InvitationAdmin` nutzt denselben Versand
+- 52 Tests grün (7 neue), mypy ohne Befunde, ruff nur RUF012; Admin-Seiten lokal geprüft, Mail-Text gerendert
