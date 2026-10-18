@@ -141,7 +141,9 @@ Administrators invite persons in the admin, in one of three ways:
   password (then the person can log in right away; only for a new login).
 - In the person list: select persons and run the action *Login anlegen und Einladung senden*. Inactive
   and already registered persons are skipped; persons who have not registered yet get a new link.
-- Under *Admin → Einladungen*.
+- Under *Admin → Einladungen*. The action *Einladung erneut senden* mails a new link, valid again for
+  the full period; the old link of that invitation stops working. Used invitations and inactive or
+  already registered persons are skipped.
 
 The link is mailed to the person and shown to the administrator only once. If the email already has a
 registered login, the person is just linked to it.

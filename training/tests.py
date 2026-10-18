@@ -431,6 +431,21 @@ class PersonLoginAdminTest(Base):
         self.assertEqual(len(mail.outbox), 2)
 
 
+    def test_resend_invitation_renews_link(self):
+        self.add_person()
+        old_link = self.invitation_link()
+        invitation = Invitation.objects.get(person__email="dora@example.ch")
+        Invitation.objects.filter(pk=invitation.pk).update(expires_at=invitation.created_at)
+        used = Invitation.objects.create(person=self.anna, token_hash="x", used_at=invitation.created_at)
+        data = {"action": "resend_selected", "_selected_action": [invitation.pk, used.pk]}
+        response = self.client.post(reverse("admin:accounts_invitation_changelist"), data, follow=True)
+        self.assertContains(response, "Einladungslinks")
+        self.assertContains(response, "Übersprungen")
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertNotEqual(self.invitation_link(), old_link)
+        self.assertEqual(self.client.get(old_link).status_code, 404)
+        self.assertEqual(self.client.get(self.invitation_link()).status_code, 200)
+
 class ClubLoginTest(Base):
     def setUp(self):
         # Anna is also a member of the other club (same login).

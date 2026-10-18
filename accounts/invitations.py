@@ -1,6 +1,7 @@
 """Login accounts and invitations for persons (person admin, its list action, invitation admin)."""
 
 import logging
+from collections.abc import Sequence
 
 from django.conf import settings
 from django.core.mail import send_mail
@@ -67,7 +68,7 @@ def invite(person, request, password: str | None = None) -> tuple[str | None, bo
         return send_invitation(Invitation(person=person), request)
 
 
-def invitation_message(invitations: list[tuple[object, str | None, bool]]):
+def invitation_message(invitations: Sequence[tuple[object, str | None, bool]]):
     """Admin message with the links, which are visible only now."""
 
     def state(url, sent):
