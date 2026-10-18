@@ -29,6 +29,7 @@ from .permissions import (
     date_allowed,
     led_squads,
     person_of,
+    unrestricted_dates,
     visible_attendances,
 )
 
@@ -43,7 +44,7 @@ def parse_date[T](value: str | None, default: T) -> date | T:
 def date_context(request, day: date) -> dict:
     return {
         "date": day,
-        "date_min": None if request.user.is_admin else earliest_date(),
+        "date_min": None if unrestricted_dates(request.user) else earliest_date(),
         "date_max": today(),
         "date_allowed": date_allowed(request.user, day),
     }

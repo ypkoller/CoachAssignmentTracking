@@ -16,16 +16,7 @@ logger = logging.getLogger(__name__)
 
 def has_registered(person) -> bool:
     """The person has a login with a password (set at registration or by the admin)."""
-    user = getattr(person, "user", None)
-    return user is not None and user.has_usable_password()
-
-
-def email_taken(email: str, person=None) -> bool:
-    """Another login (not the one of `person`) already uses this email."""
-    users = User.objects.filter(email__iexact=email)
-    if person is not None and person.pk:
-        users = users.exclude(person=person)
-    return users.exists()
+    return person.user is not None and person.user.has_usable_password()
 
 
 def send_invitation(invitation: Invitation, request) -> tuple[str, bool]:
@@ -51,26 +42,45 @@ def send_invitation(invitation: Invitation, request) -> tuple[str, bool]:
     return url, True
 
 
-def invite(person, request, password: str | None = None) -> tuple[str, bool]:
-    """Creates the login of the person if missing, optionally with a start password, and invites it."""
+def invite(person, request, password: str | None = None) -> tuple[str | None, bool]:
+    """Gives the person a login and invites it.
+
+    An existing login with the same email (from another club) is linked; if it is already
+    registered, no invitation is needed (result: no link). Otherwise a new login is created,
+    without password or with the start password (only for a new login).
+    """
     with transaction.atomic():
-        user = getattr(person, "user", None) or User(email=person.email, person=person)
-        if password:
-            user.set_password(password)
-        elif user.pk is None:
-            user.set_unusable_password()
-        user.save()
+        user = person.user or User.objects.filter(email__iexact=person.email).first()
+        created = user is None
+        if user is None:
+            user = User(email=person.email)
+            if password:
+                user.set_password(password)
+            else:
+                user.set_unusable_password()
+            user.save()
+        if person.user_id != user.pk:
+            person.user = user
+            person.save(update_fields=["user"])
+        if not created and user.has_usable_password():
+            return None, False
         return send_invitation(Invitation(person=person), request)
 
 
-def invitation_message(invitations: list[tuple[object, str, bool]]):
+def invitation_message(invitations: list[tuple[object, str | None, bool]]):
     """Admin message with the links, which are visible only now."""
+
+    def state(url, sent):
+        if url is None:
+            return "bestehender Login verknüpft, keine Einladung nötig"
+        return "E-Mail gesendet" if sent else "E-Mail fehlgeschlagen, Link selbst weitergeben"
+
     lines = format_html_join(
         "",
-        "<br>{}: {} ({})",
+        "<br>{}: {}",
         (
-            (person, url, "E-Mail gesendet" if sent else "E-Mail fehlgeschlagen, Link selbst weitergeben")
+            (person, f"{url} ({state(url, sent)})" if url else state(url, sent))
             for person, url, sent in invitations
         ),
     )
-    return format_html("Einladungslinks (werden nur jetzt angezeigt):{}", lines)
+    return format_html("Logins und Einladungslinks (Links werden nur jetzt angezeigt):{}", lines)

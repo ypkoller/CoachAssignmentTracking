@@ -36,4 +36,5 @@ urlpatterns = [
         name="password_change_done",
     ),
     path("invitation/<str:token>/", views.register, name="register"),
+    path("club/", views.switch_club, name="switch_club"),
 ]

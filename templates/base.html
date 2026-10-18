@@ -24,7 +24,13 @@
         <details class="relative">
           <summary class="cursor-pointer list-none rounded px-2 py-1 hover:bg-white/15">☰</summary>
           <div class="absolute right-0 mt-2 w-56 rounded-lg bg-white py-2 text-svf-text shadow-lg">
-            <p class="truncate px-4 pb-2 text-xs text-gray-500">{{ user.email }}</p>
+            <p class="truncate px-4 text-xs text-gray-500">{{ user.email }}</p>
+            <p class="truncate px-4 pb-2 text-sm font-medium">{% if user.person %}{{ user.person.club }}{% if user.is_club_admin %} · Vereins-Admin{% endif %}{% else %}Haupt-Admin{% endif %}</p>
+            {% for person in user.club_persons %}{% if person != user.person %}
+            <form method="post" action="{% url 'switch_club' %}">{% csrf_token %}
+              <button name="club" value="{{ person.club_id }}" class="w-full px-4 py-2 text-left hover:bg-svf-pale">Wechseln zu {{ person.club }}</button>
+            </form>
+            {% endif %}{% endfor %}
             <a href="{% url 'password_change' %}" class="block px-4 py-2 hover:bg-svf-pale">Passwort ändern</a>
             <form method="post" action="{% url 'logout' %}">{% csrf_token %}
               <button class="w-full px-4 py-2 text-left hover:bg-svf-pale">Abmelden</button>

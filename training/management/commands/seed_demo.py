@@ -32,21 +32,31 @@ class Command(BaseCommand):
         apparatus = Squad.objects.create(name="Geräteturnen", club=club)
         parent_child = Squad.objects.create(name="MUKI-Turnen", club=club)
 
-        def person(first_name, last_name, birth_year):
-            p = Person.objects.create(
+        def person(first_name, last_name, birth_year, club=club, **extra):
+            email = f"{first_name}.{last_name}@example.ch".lower()
+            user = User.objects.filter(email=email).first() or User.objects.create_user(
+                email=email, password=PASSWORD
+            )
+            return Person.objects.create(
                 first_name=first_name,
                 last_name=last_name,
-                email=f"{first_name}.{last_name}@example.ch".lower(),
+                email=email,
                 birth_year=birth_year,
                 club=club,
+                user=user,
+                **extra,
             )
-            User.objects.create_user(email=p.email, password=PASSWORD, person=p)
-            return p
 
         anna = person("Anna", "Muster", 1985)
         beat = person("Beat", "Keller", 1992)
-        carla = person("Carla", "Meier", 2001)
+        carla = person("Carla", "Meier", 2001, is_club_admin=True)
         dario = person("Dario", "Frei", 2005)
+
+        # Second club: Beat is a member of both (one login, club chosen at login).
+        other_club = Club.objects.create(name="TV Beispiel")
+        volleyball = Squad.objects.create(name="Volleyball", club=other_club)
+        beat_other = person("Beat", "Keller", 1992, club=other_club)
+        eva = person("Eva", "Brunner", 1990, club=other_club, is_club_admin=True)
 
         start = today() - timedelta(days=90)
         SquadLeadership.objects.create(person=anna, squad=jugi, valid_from=start)
@@ -59,6 +69,10 @@ class Command(BaseCommand):
             (carla, parent_child, Role.HEAD_LEADER),
         ]:
             SquadAssignment.objects.create(person=p, squad=squad, role=role, valid_from=start)
+        SquadLeadership.objects.create(person=eva, squad=volleyball, valid_from=start)
+        SquadAssignment.objects.create(
+            person=beat_other, squad=volleyball, role=Role.HEAD_LEADER, valid_from=start
+        )
 
         for days in (2, 4, 9, 11, 16):
             day = today() - timedelta(days=days)
@@ -73,8 +87,9 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Demo data created. Logins (password for all: {PASSWORD}): "
-                "admin@example.ch (administrator), anna.muster@example.ch "
-                "(squad leader Jugi), beat.keller@example.ch, carla.meier@example.ch, "
+                "admin@example.ch (main administrator), carla.meier@example.ch (club "
+                "administrator STV Demo), eva.brunner@example.ch (club administrator TV Beispiel), "
+                "anna.muster@example.ch (squad leader Jugi), beat.keller@example.ch (both clubs), "
                 "dario.frei@example.ch"
             )
         )

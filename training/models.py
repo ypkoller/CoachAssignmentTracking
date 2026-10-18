@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
+from django.conf import settings
 from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import DateRangeField, RangeBoundary, RangeOperators
 from django.core.exceptions import ValidationError
@@ -92,13 +93,30 @@ class Squad(AuditedModel):
 
 
 class Person(AuditedModel):
+    """A person in one club. The same login can belong to persons in several clubs."""
+
     last_name = models.CharField("Name", max_length=100)
     first_name = models.CharField("Vorname", max_length=100)
     email = models.EmailField("E-Mail")  # R3
     birth_year = models.PositiveSmallIntegerField("Jahrgang", null=True, blank=True)
+    # Inactive: no access in this club; the login itself stays usable for other clubs.
     is_active = models.BooleanField("aktiv", default=True)
+    is_club_admin = models.BooleanField(
+        "Vereins-Admin",
+        default=False,
+        help_text="Verwaltet Riegen, Personen und Einsätze dieses Vereins.",
+    )
     club = models.ForeignKey(  # R2
         Club, verbose_name="Verein", on_delete=models.PROTECT, related_name="persons"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Login",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="persons",
     )
 
     class Meta:
@@ -108,23 +126,32 @@ class Person(AuditedModel):
         constraints = [
             models.UniqueConstraint(
                 Lower("email"),
-                name="person_email_ci_unique",
-                violation_error_message="Diese E-Mail wird bereits verwendet.",
+                "club",
+                name="person_email_ci_unique_per_club",
+                violation_error_message="Diese E-Mail wird in diesem Verein bereits verwendet.",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "club"],
+                name="person_one_per_login_and_club",
+                violation_error_message="Dieser Login hat in diesem Verein bereits eine Person.",
             ),
         ]
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
 
+    def clean(self):
+        super().clean()
+        # The email is the username of the login; it is changed on the login, for all its persons.
+        user = self.user if self.user_id else None
+        if user is not None and self.email and self.email.lower() != user.email:
+            raise ValidationError(
+                {"email": "Die E-Mail gehört zum Login. Ändern kann sie nur der Haupt-Admin am Login."}
+            )
+
     def save(self, *args, **kwargs):
         self.email = self.email.lower()
         super().save(*args, **kwargs)
-        # Keep the login account in sync: email as username, locked when inactive.
-        user = getattr(self, "user", None)
-        if user is not None and (user.email != self.email or user.is_active != self.is_active):
-            user.email = self.email
-            user.is_active = self.is_active
-            user.save(update_fields=["email", "is_active"])
 
 
 if TYPE_CHECKING:

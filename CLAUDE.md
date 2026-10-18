@@ -91,6 +91,13 @@ DJANGO_SECRET_KEY=mypy .venv/Scripts/mypy .          # type check (django-stubs 
 - The admin creates logins and invitations through `accounts/invitations.py` (`invite`, `send_invitation`);
   a login without a usable password counts as invited but not registered.
 - Permissions are object-level and live in `training/permissions.py`; every view checks through them.
+- Clubs: a `User` has one `Person` per club (`Person.user`). The club chosen at login is in the session;
+  `accounts.clubs.ClubMiddleware` sets `request.user.person` (person in that club) and `club_persons`.
+  Permissions always use `user.person`, never `user.persons`. `user.is_admin` = main administrator
+  (`is_superuser`), `user.is_club_admin` = club administrator in the chosen club, `user.is_staff` = either.
+- Admin classes for club data inherit `training.admin_scope.ClubScopedAdmin` (set `club_lookup`) or
+  `ClubScopedInline`; they filter querysets, foreign key choices and list filters to the club.
+  `UserAdmin` and `ClubAdmin` are main-administrator only (Django permissions; club admins have none).
 - Dates are local (`training.models.today()`, Europe/Zurich).
 - Frontend assets are local: Tailwind is built in the Docker `assets` stage from `frontend/`
   (`static/css/` is generated, not committed); HTMX and Roboto live in `static/`. The Tailwind CLI is
@@ -106,7 +113,7 @@ DJANGO_SECRET_KEY=mypy .venv/Scripts/mypy .          # type check (django-stubs 
 | Rule | Enforcement |
 |---|---|
 | R1, R2 | `NOT NULL` FK |
-| R3 | `UniqueConstraint(Lower("email"))` on `Person` and `User`; login looks up `email__iexact` |
+| R3 | `UniqueConstraint(Lower("email"))` on `User`, `(Lower("email"), club)` on `Person`; `Person.clean()` keeps the email equal to the login's; login looks up `email__iexact` |
 | R5, R6 | `ExclusionConstraint` (`btree_gist`): person =, squad =, `daterange(valid_from, valid_until, '[]')` && |
 | R7 | `CheckConstraint` |
 | R8 | `SameClubMixin.clean()` + DB trigger `training_check_same_club` |

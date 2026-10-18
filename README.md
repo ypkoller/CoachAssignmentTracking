@@ -26,8 +26,12 @@ reports and an export of the number of attendances. The user interface is in Ger
 
 - Email/password login with **Django sessions** (HttpOnly and Secure cookie, stored server-side in Postgres)
 - Long sessions (1 year, extended on activity)
-- Logout ends the current device. A password change ends all other sessions. Deactivated persons lose access immediately.
-- **Registration only via invitation link:** the administrator creates a one-time token, the person registers themselves and is linked to their person record.
+- **Login with club:** one login (email + password) can belong to several clubs. The login form asks for the
+  club; it is only required if the login is active in more than one club. The session works in the chosen club;
+  the menu allows switching clubs without logging in again. The main administrator needs no club.
+- Logout ends the current device. A password change ends all other sessions. A deactivated person immediately
+  loses access in their club (the login stays usable in other clubs).
+- **Registration only via invitation link:** an administrator creates a one-time token, the person registers themselves and is linked to their person record. If the email already has a login (from another club), the person is linked to it and no new registration is needed.
 - **"Forgot password?":** one-time link valid for 1 h via the club's own SMTP server. The response is generic (no account enumeration) and rate-limited.
 
 ## Roles and permissions
@@ -36,7 +40,8 @@ A person can have several roles at the same time. A squad leader can, for exampl
 
 | Role | How is it granted? | Permissions |
 |---|---|---|
-| **Administrator** | Flag on the login account, **global** across all clubs | Always has all permissions. Maintains clubs, squads, persons and squad leaderships. Creates invitation links. |
+| **Main administrator** (Haupt-Admin) | `is_superuser` on the login, **global** | Everything in all clubs: creates clubs, manages logins (email, password, lock, main administrator flag). |
+| **Club administrator** (Vereins-Admin) | Flag on the person, **per club** | In **their** club, in the app like an administrator (all squads, all attendances, no 30-day limit) and in the admin: squads, persons (incl. logins and invitations), squad leaderships, assignments, attendances, appoint further club administrators. Sees no other clubs. |
 | **Squad leader** (Riegenleiter) | Valid `SquadLeadership` (person ↔ squad, 1..n squads) | For **their** squads: assign or remove head and assistant leaders (by setting "valid until"), view all attendances, record, change or delete attendances for the assigned leaders (**up to 30 days back**) |
 | **Leader** (head or assistant leader) | Valid `SquadAssignment` on the day | Record **their own** attendances, only for squads and days they are assigned to. View their own attendances. Record, change or delete their own attendances **up to 30 days back**. |
 
@@ -73,11 +78,11 @@ Club ──< Squad
 |---|---|
 | **Club** (Verein) | name |
 | **Squad** (Riege) | name, club (FK) |
-| **Person** | last name, first name, email (required, unique), birth year, active (yes/no), club (FK) |
+| **Person** | last name, first name, email (required, unique per club), birth year, active (yes/no), club administrator (yes/no), club (FK), login (FK, optional; at most one person per login and club) |
 | **SquadLeadership** (Riegenleitung) | person (FK), squad (FK), valid from, valid until (empty = open) |
 | **SquadAssignment** (Riegenzuteilung) | person (FK), squad (FK), role (`HEAD_LEADER` / `ASSISTANT_LEADER`), valid from, valid until (empty = open) |
 | **Attendance** (Einsatz) | person (FK), squad (FK), date, role (taken from the valid assignment on save) |
-| **User** (Benutzer) | login account: email as username, password hash, 1:1 with a person. Deactivating the person also locks the login and ends all sessions. |
+| **User** (Benutzer) | login account: email as username, password hash, main administrator flag; one person per club. Changing the email changes it on all its persons. |
 | **Invitation** (Einladung) | token (hashed), expiry, used at, linked person |
 
 Every table also records **when and by whom** a row was created and last changed
@@ -92,7 +97,7 @@ Of personal data, **only** last name, first name, email, birth year and active a
 |---|---|
 | R1 | A squad belongs to exactly one club. |
 | R2 | A person belongs to exactly one club. |
-| R3 | The email is required and unique (case-insensitive), because it is the login. |
+| R3 | The email is required. It is unique (case-insensitive) per login and, for persons, per club; a person with a login has the login's email. |
 | R4 | A person has 0..n squad assignments, also to several squads. |
 | R5 | Per person and squad at most one valid assignment at a time (no overlapping periods). |
 | R6 | Per person and squad at most one valid squad leadership at a time. |
@@ -101,7 +106,7 @@ Of personal data, **only** last name, first name, email, birth year and active a
 | R9 | An attendance is only possible if the person is assigned to the squad on that date. The role is taken from the assignment. |
 | R10 | Per person, squad and date at most one attendance. |
 | R11 | Per squad and date at most one head leader. |
-| R12 | Leaders and squad leaders may record, change or delete attendances only up to 30 days back. Administrators are exempt. |
+| R12 | Leaders and squad leaders may record, change or delete attendances only up to 30 days back. Administrators (main and club administrators, in their club) are exempt. |
 | R13 | Attendances in the future are not allowed (for everyone, including administrators; time zone Europe/Zurich). |
 
 ## Architecture
@@ -124,19 +129,22 @@ docker compose exec web python manage.py createsuperuser
 docker compose down                                  # stop (data is kept; add -v to delete it)
 ```
 
-Demo logins (password `demo1234!`): `admin@example.ch` (administrator), `anna.muster@example.ch`
-(squad leader Jugi), `beat.keller@example.ch`, `carla.meier@example.ch`, `dario.frei@example.ch`.
+Demo logins (password `demo1234!`): `admin@example.ch` (main administrator), `carla.meier@example.ch`
+(club administrator STV Demo), `eva.brunner@example.ch` (club administrator TV Beispiel),
+`anna.muster@example.ch` (squad leader Jugi), `beat.keller@example.ch` (member of both clubs, choose the club
+at login), `dario.frei@example.ch`.
 
 Without `EMAIL_HOST`, mails (password reset) are written to the container log (`docker compose logs web`).
-The administrator invites persons in the admin, in one of three ways:
+Administrators invite persons in the admin, in one of three ways:
 
 - When creating or editing a person: check *Login anlegen und Einladung senden*, optionally with a start
-  password (then the person can log in right away).
+  password (then the person can log in right away; only for a new login).
 - In the person list: select persons and run the action *Login anlegen und Einladung senden*. Inactive
   and already registered persons are skipped; persons who have not registered yet get a new link.
 - Under *Admin → Einladungen*.
 
-The link is mailed to the person and shown to the administrator only once.
+The link is mailed to the person and shown to the administrator only once. If the email already has a
+registered login, the person is just linked to it.
 
 ### Locally without Docker
 
@@ -225,6 +233,5 @@ with scheduled backups. `docker-compose.yml` is only used for local development.
 
 - Compensation calculation (only the number of attendances is reported)
 - Fixed training days and schedule templates
-- Administrators per club (global only for now)
 - Offline recording
 - Native apps / JWT API (can be added later via `djangorestframework-simplejwt`)

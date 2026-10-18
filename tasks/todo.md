@@ -201,3 +201,57 @@ Personen-Liste · Link per E-Mail senden **und** im Admin anzeigen.
 - Personen-Admin: Abschnitt «Login» (Status mit Link auf den Benutzer, Checkbox, Startpasswort mit
   Passwortregeln), Spalte «registriert», Aktion für mehrere Personen; `InvitationAdmin` nutzt denselben Versand
 - 52 Tests grün (7 neue), mypy ohne Befunde, ruff nur RUF012; Admin-Seiten lokal geprüft, Mail-Text gerendert
+
+---
+
+# Haupt-Admin und Vereins-Admin, Login mit Verein (Branch `club-admins`)
+
+Antworten (2026-10-18): ein Login für mehrere Vereine · Vereins-Admin im Django-Admin (gefiltert) ·
+Haupt- und Vereins-Admins ernennen Vereins-Admins · Vereins-Admin hat bei Einsätzen im Verein Admin-Rechte
+(ohne 30-Tage-Grenze) · alte Daten dürfen verloren gehen.
+
+## Plan
+
+- [x] 1. Datenmodell
+      - `Person.user` (FK → User, `related_name="persons"`) statt `User.person`; höchstens eine Person je
+        Login und Verein. `Person.email` eindeutig **je Verein** statt global (R3)
+      - `Person.is_club_admin` («Vereins-Admin»); Haupt-Admin = `User.is_superuser` (unverändert)
+      - `User.is_staff` als Feld entfernen, wird Eigenschaft: Haupt-Admin oder Vereins-Admin im gewählten Verein
+      - Migrationen als Folge-Migrationen (keine DB-Neuinstallation auf dem Server); bestehende Verknüpfungen
+        werden übernommen
+- [x] 2. Login und Sitzung
+      - Login-Formular mit Feld «Verein» (optional); Pflicht nur, wenn der Login in mehreren Vereinen aktiv ist.
+        Haupt-Admin ohne Person braucht keinen Verein
+      - Gewählter Verein in der Sitzung; Middleware setzt `request.user.person` (Person im gewählten Verein).
+        Wird die Person deaktiviert, endet die Sitzung sofort (wie heute)
+      - Menü zeigt den Verein; bei mehreren Vereinen «Verein wechseln» ohne neues Login
+      - `/admin/login/` leitet auf das normale Login um (sonst fehlt die Vereinswahl)
+- [x] 3. Berechtigungen in der App (`training/permissions.py`): Vereins-Admin = Admin-Rechte im eigenen Verein
+      (alle Riegen leiten, alle Einsätze sehen/ändern/exportieren, keine 30-Tage-Grenze)
+- [x] 4. Django-Admin gefiltert (Mixin für alle Admin-Klassen)
+      - Haupt-Admin: alles, inkl. Vereine und Benutzer (Logins)
+      - Vereins-Admin: Riegen, Personen, Riegenleitungen, Riegenzuteilungen, Einsätze, Einladungen **nur im
+        eigenen Verein**; Auswahllisten (Verein, Person, Riege) ebenfalls eingeschränkt; kann Vereins-Admins ernennen
+      - Benutzer (Logins) verwaltet der Vereins-Admin über die Person (Login anlegen, einladen, Person
+        deaktivieren); die Benutzer-Verwaltung selbst bleibt dem Haupt-Admin, weil ein Login mehrere Vereine betrifft
+- [x] 5. Einladung bei mehreren Vereinen: gibt es zur E-Mail schon einen Login, wird die Person damit verknüpft
+      (keine zweite Registrierung). Startpasswort nur bei einem neu angelegten Login (sonst könnte ein Verein das
+      Passwort eines fremden Logins setzen). E-Mail einer verknüpften Person ändert nur der Haupt-Admin am Login
+      (wird dann auf alle Personen übertragen)
+- [x] 6. Demo-Daten: zweiter Verein, Vereins-Admin, eine Person in beiden Vereinen
+- [x] 7. Tests: Login mit/ohne Verein, Vereinswechsel, Filter im Admin (fremde Daten weder sichtbar noch per ID
+      erreichbar), Berechtigungen Vereins-Admin, Einladung mit bestehendem Login, Deaktivierung
+- [x] 8. Doku (README Rollen/Datenmodell/R3, CLAUDE.md), Verifikation (Tests, mypy, ruff, lokal durchklicken)
+
+## Review
+
+- Datenmodell: `Person.user` (FK) + `is_club_admin`, E-Mail eindeutig je Verein, `User.is_staff` ist eine
+  Eigenschaft; Migrationen `0003_persons_per_club` (Verknüpfungen werden per SQL übernommen)
+- Login mit optionalem Verein (`EmailLoginForm`), `ClubMiddleware`, Vereinswechsel im Menü, `/admin/login/`
+  leitet auf das normale Login um (eingeloggt ohne Rechte: 403 statt Umleitungsschleife)
+- `ClubScopedAdmin`/`ClubScopedInline`: Querysets, Auswahllisten und Filter auf den Verein beschränkt;
+  Benutzer und Vereine nur für den Haupt-Admin
+- Einladung verknüpft bestehende Logins; Startpasswort nur für neue Logins; E-Mail-Änderung am Login wird auf
+  alle Personen übertragen
+- 69 Tests grün (17 neue), mypy ohne Befunde, ruff nur RUF012, `makemigrations --check` ohne Änderungen,
+  Migration auf bestehender DB getestet; Demo-Logins per HTTP durchgespielt

@@ -5,9 +5,10 @@ from django.urls import reverse
 from django.utils.html import format_html
 
 from accounts.audit import AUDIT_FIELDS, AuditedAdmin
-from accounts.invitations import email_taken, has_registered, invitation_message, invite
+from accounts.invitations import has_registered, invitation_message, invite
 from accounts.models import User
 
+from .admin_scope import ClubScopedAdmin, ClubScopedInline
 from .models import Attendance, Club, Person, Squad, SquadAssignment, SquadLeadership
 
 
@@ -16,20 +17,20 @@ class ClubAdmin(AuditedAdmin):
     search_fields = ["name"]
 
 
-class SquadLeadershipInline(admin.TabularInline):
+class SquadLeadershipInline(ClubScopedInline):
     model = SquadLeadership
     extra = 0
     autocomplete_fields = ["person"]
 
 
-class SquadAssignmentInline(admin.TabularInline):
+class SquadAssignmentInline(ClubScopedInline):
     model = SquadAssignment
     extra = 0
     autocomplete_fields = ["person"]
 
 
 @admin.register(Squad)
-class SquadAdmin(AuditedAdmin):
+class SquadAdmin(ClubScopedAdmin):
     list_display = ["name", "club"]
     list_filter = ["club"]
     search_fields = ["name"]
@@ -64,8 +65,12 @@ class PersonAdminForm(forms.ModelForm):
         email = cleaned.get("email")
         if not cleaned.get("is_active"):
             self.add_error("create_login", "Für inaktive Personen kann kein Login angelegt werden.")
-        if email and email_taken(email, self.instance):
-            self.add_error("create_login", "Diese E-Mail wird bereits von einem anderen Login verwendet.")
+        # An existing login (possibly of another club) keeps its password.
+        if password and (self.instance.user_id or User.objects.filter(email__iexact=email).exists()):
+            self.add_error(
+                "password", "Für diese E-Mail gibt es bereits einen Login; er wird mit der Person verknüpft."
+            )
+            return cleaned
         if password:
             try:
                 password_validation.validate_password(password, User(email=email or ""))
@@ -75,35 +80,52 @@ class PersonAdminForm(forms.ModelForm):
 
 
 @admin.register(Person)
-class PersonAdmin(AuditedAdmin):
+class PersonAdmin(ClubScopedAdmin):
     form = PersonAdminForm
-    list_display = ["last_name", "first_name", "email", "birth_year", "is_active", "club", "registered"]
-    list_filter = ["is_active", "club"]
+    list_display = [
+        "last_name",
+        "first_name",
+        "email",
+        "birth_year",
+        "is_active",
+        "is_club_admin",
+        "club",
+        "registered",
+    ]
+    list_filter = ["is_active", "is_club_admin", "club"]
     search_fields = ["last_name", "first_name", "email"]
     list_select_related = ["club", "user"]
-    readonly_fields = ["login"]
+    # Only the main administrator manages logins, so only they get the link to it.
+    readonly_fields = ["login", "login_link"]
     actions = ["invite_selected"]
 
     def get_fieldsets(self, request, obj=None):
-        fields = ["last_name", "first_name", "email", "birth_year", "is_active", "club"]
+        fields = ["last_name", "first_name", "email", "birth_year", "is_active", "is_club_admin", "club"]
         # Once registered, the password belongs to the person; only the link to the login remains.
-        login = [] if obj is None else ["login"]
+        login = [] if obj is None else ["login_link" if request.user.is_admin else "login"]
         if obj is None or not has_registered(obj):
-            login += ["create_login", "password"]
+            login.append("create_login")
+        if obj is None or obj.user_id is None:
+            login.append("password")
         fieldsets = [(None, {"fields": fields}), ("Login", {"fields": login})]
         if obj is not None:
             fieldsets.append(("Daten", {"fields": AUDIT_FIELDS}))
         return fieldsets
 
+    @staticmethod
+    def login_state(user) -> str:
+        return "registriert" if user.has_usable_password() else "eingeladen, noch nicht registriert"
+
     @admin.display(description="Login")
     def login(self, obj):
-        user = getattr(obj, "user", None)
-        if user is None:
+        return f"{obj.user} ({self.login_state(obj.user)})" if obj.user else "kein Login"
+
+    @admin.display(description="Login")
+    def login_link(self, obj):
+        if obj.user is None:
             return "kein Login"
-        state = "registriert" if user.has_usable_password() else "eingeladen, noch nicht registriert"
-        return format_html(
-            '<a href="{}">{}</a> ({})', reverse("admin:accounts_user_change", args=[user.pk]), user, state
-        )
+        url = reverse("admin:accounts_user_change", args=[obj.user.pk])
+        return format_html('<a href="{}">{}</a> ({})', url, obj.user, self.login_state(obj.user))
 
     @admin.display(description="registriert", boolean=True)
     def registered(self, obj):
@@ -112,14 +134,14 @@ class PersonAdmin(AuditedAdmin):
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
         if form.cleaned_data.get("create_login") and not has_registered(obj):
-            url, sent = invite(obj, request, form.cleaned_data.get("password") or None)
-            self.message_user(request, invitation_message([(obj, url, sent)]), messages.WARNING)
+            result = invite(obj, request, form.cleaned_data.get("password") or None)
+            self.message_user(request, invitation_message([(obj, *result)]), messages.WARNING)
 
     @admin.action(description="Login anlegen und Einladung senden")
     def invite_selected(self, request, queryset):
         invitations, skipped = [], []
         for person in queryset.select_related("user"):
-            if not person.is_active or has_registered(person) or email_taken(person.email, person):
+            if not person.is_active or has_registered(person):
                 skipped.append(str(person))
                 continue
             invitations.append((person, *invite(person, request)))
@@ -128,28 +150,31 @@ class PersonAdmin(AuditedAdmin):
         if skipped:
             self.message_user(
                 request,
-                "Übersprungen (inaktiv, bereits registriert oder E-Mail von anderem Login belegt): "
+                "Übersprungen (inaktiv oder bereits registriert): "
                 + ", ".join(skipped),
                 messages.INFO,
             )
 
 
 @admin.register(SquadLeadership)
-class SquadLeadershipAdmin(AuditedAdmin):
+class SquadLeadershipAdmin(ClubScopedAdmin):
+    club_lookup = "squad__club"
     list_display = ["person", "squad", "valid_from", "valid_until"]
     list_filter = ["squad__club", "squad"]
     autocomplete_fields = ["person", "squad"]
 
 
 @admin.register(SquadAssignment)
-class SquadAssignmentAdmin(AuditedAdmin):
+class SquadAssignmentAdmin(ClubScopedAdmin):
+    club_lookup = "squad__club"
     list_display = ["person", "squad", "role", "valid_from", "valid_until"]
     list_filter = ["role", "squad__club", "squad"]
     autocomplete_fields = ["person", "squad"]
 
 
 @admin.register(Attendance)
-class AttendanceAdmin(AuditedAdmin):
+class AttendanceAdmin(ClubScopedAdmin):
+    club_lookup = "squad__club"
     list_display = ["date", "squad", "person", "role", "created_by"]
     list_filter = ["role", "squad__club", "squad"]
     date_hierarchy = "date"

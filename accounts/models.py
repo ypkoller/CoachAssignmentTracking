@@ -1,6 +1,7 @@
 import hashlib
 import secrets
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
@@ -9,6 +10,9 @@ from django.db.models.functions import Lower
 from django.utils import timezone
 
 from .audit import AuditedModel
+
+if TYPE_CHECKING:
+    from training.models import Person
 
 
 class UserManager(BaseUserManager["User"]):
@@ -23,12 +27,10 @@ class UserManager(BaseUserManager["User"]):
         return user
 
     def create_user(self, email, password=None, **extra_fields):
-        extra_fields.setdefault("is_staff", False)
         extra_fields.setdefault("is_superuser", False)
         return self._create_user(email, password, **extra_fields)
 
     def create_superuser(self, email, password=None, **extra_fields):
-        extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         return self._create_user(email, password, **extra_fields)
 
@@ -37,21 +39,20 @@ class UserManager(BaseUserManager["User"]):
 
 
 class User(AuditedModel, AbstractBaseUser, PermissionsMixin):
-    """Login account. `is_superuser` is the global administrator flag."""
+    """Login account, possibly for several clubs (one `Person` per club).
+
+    `is_superuser` is the main administrator flag (global).
+    """
 
     email = models.EmailField("E-Mail")
-    person = models.OneToOneField(
-        "training.Person",
-        verbose_name="Person",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="user",
-    )
     is_active = models.BooleanField("aktiv", default=True)
-    is_staff = models.BooleanField("Zugang zum Admin", default=False)
 
     objects = UserManager()
+
+    # Set per request by `accounts.clubs.ClubMiddleware`: the person in the club chosen at
+    # login, and all active persons of this login.
+    person: Person | None = None
+    club_persons: list[Person] = []
 
     USERNAME_FIELD = "email"
     EMAIL_FIELD = "email"
@@ -69,10 +70,27 @@ class User(AuditedModel, AbstractBaseUser, PermissionsMixin):
     def save(self, *args, **kwargs):
         self.email = self.email.lower()
         super().save(*args, **kwargs)
+        # The email is the username: keep the persons of this login in sync.
+        update_fields = kwargs.get("update_fields")
+        if update_fields is None or "email" in update_fields:
+            for person in self.persons.exclude(email=self.email):
+                person.email = self.email
+                person.save(update_fields=["email"])
 
     @property
     def is_admin(self) -> bool:
+        """Main administrator: everything, in all clubs."""
         return self.is_active and self.is_superuser
+
+    @property
+    def is_club_admin(self) -> bool:
+        """Club administrator in the club chosen at login."""
+        return self.is_active and self.person is not None and self.person.is_club_admin
+
+    @property
+    def is_staff(self) -> bool:
+        """Access to the Django admin (checked by the admin site and used in templates)."""
+        return self.is_admin or self.is_club_admin
 
 
 def hash_token(token: str) -> str:
