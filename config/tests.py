@@ -48,6 +48,10 @@ class HealthCheckTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"ok")
 
+    def test_ok_without_trailing_slash(self):
+        response = self.client.get("/health", HTTP_HOST="localhost:8000")
+        self.assertEqual(response.status_code, 200)
+
     def test_database_unavailable(self):
         with mock.patch("config.health.connection.cursor", side_effect=OperationalError):
             response = self.client.get("/health/", HTTP_HOST="localhost")

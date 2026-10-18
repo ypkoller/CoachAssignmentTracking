@@ -1,7 +1,8 @@
 from django.db import DatabaseError, connection
 from django.http import HttpResponse
 
-HEALTH_PATH = "/health/"
+# Coolify requests the path without the trailing slash.
+HEALTH_PATHS = {"/health", "/health/"}
 
 
 class HealthCheckMiddleware:
@@ -15,7 +16,7 @@ class HealthCheckMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path != HEALTH_PATH:
+        if request.path not in HEALTH_PATHS:
             return self.get_response(request)
         try:
             with connection.cursor() as cursor:
