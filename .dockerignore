@@ -5,3 +5,4 @@
 **/__pycache__
 staticfiles
 tasks
+docker-compose.override.yml
