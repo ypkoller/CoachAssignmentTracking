@@ -1,4 +1,4 @@
-# Trainingserfassung
+# Coach Assignment Tracking
 
 Mobile-friendly browser app (PWA) for recording leader attendances per squad ("Riege"), with
 reports and an export of the number of attendances. The user interface is in German.
