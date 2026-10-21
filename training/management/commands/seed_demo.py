@@ -15,7 +15,7 @@ from training.models import (
     today,
 )
 
-PASSWORD = "demo1234!"
+PASSWORD = "demo1234!"  # noqa: S105 (documented demo password)
 
 
 class Command(BaseCommand):

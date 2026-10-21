@@ -70,6 +70,7 @@ docker compose exec web python manage.py seed_demo   # demo data, password demo1
 docker compose run --rm web python manage.py test    # tests need Postgres (constraints, triggers)
 DJANGO_SECRET_KEY=mypy .venv/Scripts/mypy .          # type check (django-stubs loads the settings)
 .venv/Scripts/ruff check .                           # lint (RUF012 on Django Meta/admin lists is known noise)
+.venv/Scripts/ruff check --select S .                # security rules (flake8-bandit), must be clean
 ```
 
 - The Docker image contains only production dependencies; mypy/ruff run from the local `.venv`
@@ -106,6 +107,10 @@ DJANGO_SECRET_KEY=mypy .venv/Scripts/mypy .          # type check (django-stubs 
   production behind Coolify/Traefik = 1). Never read `REMOTE_ADDR` or `X-Forwarded-For` directly.
 - `/health/` is answered by `config.health.HealthCheckMiddleware` (first middleware, before the host
   check); used by the Docker `HEALTHCHECK` and Coolify.
+- Security checks: `.github/workflows/security.yml` (push, PR, weekly): ruff `S`, Semgrep, pip-audit,
+  Trivy (image + Dockerfile), `check --deploy`; Dependabot in `.github/dependabot.yml`. Justify every
+  `noqa: S…` / `nosemgrep`. The runtime image contains no pip (its vendored libraries trigger CVEs).
+- Spreadsheet exports pass text through `training.views.spreadsheet_safe` (CSV/formula injection).
 - Deployment: Coolify v4, Dockerfile build pack, separate Coolify Postgres; see README "Deployment".
 
 ### How the business rules are enforced

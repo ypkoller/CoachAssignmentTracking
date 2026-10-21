@@ -23,7 +23,7 @@ class EmailLoginForm(AuthenticationForm):
         cleaned = super().clean()
         # Only reached with valid credentials.
         user = self.user_cache
-        assert user is not None
+        assert user is not None  # noqa: S101 (type narrowing; AuthenticationForm guarantees it)
         persons = active_persons(user)
         club = cleaned.get("club")
         if club is not None:

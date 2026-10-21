@@ -9,7 +9,8 @@ ENV POETRY_VIRTUALENVS_IN_PROJECT=true \
 RUN pip install "poetry>=2,<3"
 WORKDIR /app
 COPY pyproject.toml poetry.lock ./
-RUN poetry install --only main --no-root
+RUN poetry install --only main --no-root \
+    && .venv/bin/python -m pip uninstall -y pip
 
 # --- Asset stage: build the CSS with the Tailwind standalone CLI (no Node needed) -
 FROM python:3.14-slim AS assets
@@ -40,10 +41,12 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     WEB_CONCURRENCY=3
 
-# curl for the healthcheck (also used by Coolify).
+# curl for the healthcheck (also used by Coolify). pip is not needed at runtime; removing it
+# also removes its vendored libraries, which vulnerability scanners report.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip uninstall -y --root-user-action=ignore pip
 RUN useradd --system --uid 1000 --home /app app
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv

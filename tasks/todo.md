@@ -255,3 +255,16 @@ Haupt- und Vereins-Admins ernennen Vereins-Admins · Vereins-Admin hat bei Eins�
   alle Personen übertragen
 - 69 Tests grün (17 neue), mypy ohne Befunde, ruff nur RUF012, `makemigrations --check` ohne Änderungen,
   Migration auf bestehender DB getestet; Demo-Logins per HTTP durchgespielt
+
+# Automatisierte Sicherheitsprüfung
+
+- [x] ruff `S` (flake8-bandit) aktiviert; 3 bewusste Ausnahmen mit Begründung (`noqa`), Tests ausgenommen
+- [x] Semgrep (`p/django`, `p/python`, `p/secrets`, `p/dockerfile`): CSV-/Formel-Injection im Export gefunden
+  → `spreadsheet_safe()` für CSV und Excel, Regressionstest
+- [x] pip-audit (Poetry-Export): keine bekannten Schwachstellen
+- [x] Trivy: `poetry.lock` und Dockerfile sauber; Image hatte 5 HIGH/CRITICAL in pip-internen Bibliotheken
+  → pip aus dem Laufzeit-Image entfernt → 0
+- [x] `manage.py check --deploy --fail-level WARNING` mit Produktionseinstellungen: keine Meldungen
+- [x] `.github/workflows/security.yml` (Push, PR, wöchentlich) und `.github/dependabot.yml`
+- [x] Verifikation: alle CI-Schritte lokal nachgestellt, 71 Tests grün, mypy sauber, `/health/` ok
+- [ ] Auf GitHub einschalten: CodeQL (Default setup), Dependabot alerts, Secret scanning + Push protection
