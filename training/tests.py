@@ -1,10 +1,12 @@
 from datetime import date, timedelta
+from io import BytesIO
 
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
+from openpyxl import load_workbook
 
 from accounts.clubs import SESSION_KEY
 from accounts.models import Invitation, User
@@ -329,6 +331,17 @@ class ViewsTest(Base):
         response = self.client.get(reverse("export"), {"from": since, "format": "xlsx"})
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.content.startswith(b"PK"))
+
+    def test_export_neutralises_formulas(self):
+        Person.objects.filter(pk=self.beat.pk).update(last_name='=HYPERLINK("http://x")')
+        self.attendance(self.beat, self.jugi, 1)
+        self.client.force_login(self.admin)
+        since = (today() - timedelta(days=10)).isoformat()
+        response = self.client.get(reverse("export"), {"from": since, "format": "csv"})
+        self.assertIn("'=HYPERLINK", response.content.decode("utf-8-sig"))
+        response = self.client.get(reverse("export"), {"from": since, "format": "xlsx"})
+        sheet = load_workbook(BytesIO(response.content)).active
+        self.assertEqual(sheet["A3"].data_type, "s")
 
     def test_inactive_person_loses_access_immediately(self):
         self.client.force_login(User.objects.get(persons=self.beat))

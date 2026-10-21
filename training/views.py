@@ -191,6 +191,13 @@ def attendance_list(request):
     )
 
 
+def spreadsheet_safe(value):
+    """Neutralise text that a spreadsheet would run as a formula (CSV/formula injection)."""
+    if isinstance(value, str) and value.startswith(("=", "+", "-", "@", "\t", "\r")):
+        return "'" + value
+    return value
+
+
 @login_required
 def export(request):
     """Number of attendances per person, squad and role in the period (CSV or Excel)."""
@@ -198,7 +205,16 @@ def export(request):
     roles = dict(Role.choices)
     header = ["Name", "Vorname", "Riege", "Funktion", "Anzahl Einsätze"]
     data = [
-        [r["person__last_name"], r["person__first_name"], r["squad__name"], roles[r["role"]], r["count"]]
+        [
+            spreadsheet_safe(value)
+            for value in (
+                r["person__last_name"],
+                r["person__first_name"],
+                r["squad__name"],
+                roles[r["role"]],
+                r["count"],
+            )
+        ]
         for r in summary(request, since, until)
     ]
     filename = f"einsaetze_{since:%Y-%m-%d}_{until:%Y-%m-%d}"
@@ -208,8 +224,9 @@ def export(request):
         response["Content-Disposition"] = f'attachment; filename="{filename}.csv"'
         response.write("﻿")  # BOM so that Excel detects the umlauts correctly
         writer = csv.writer(response, delimiter=";")
-        writer.writerow(header)
-        writer.writerows(data)
+        # nosemgrep comments: csv-writer-injection; values went through spreadsheet_safe() above.
+        writer.writerow(header)  # nosemgrep
+        writer.writerows(data)  # nosemgrep
         return response
 
     wb = Workbook()
