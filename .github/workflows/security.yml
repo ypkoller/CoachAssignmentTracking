@@ -19,7 +19,7 @@ jobs:
     name: Code (ruff security rules, Semgrep)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
@@ -37,7 +37,7 @@ jobs:
     name: Dependencies (pip-audit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
@@ -51,7 +51,7 @@ jobs:
     name: Docker image (Trivy, Django deploy check)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Build
         run: docker build -t app:ci .
       - name: Trivy image (HIGH/CRITICAL with a fix)
