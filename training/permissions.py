@@ -8,6 +8,8 @@ from datetime import date
 
 from django.db.models import Q, QuerySet
 
+from auditlog.models import AuditEntry
+
 from .models import (
     Attendance,
     Person,
@@ -95,3 +97,17 @@ def visible_attendances(user) -> QuerySet[Attendance]:
             condition &= Q(date__lte=leadership.valid_until)
         visible |= condition
     return qs.filter(visible)
+
+
+def can_view_audit(user) -> bool:
+    """The change log is for administrators only."""
+    return user.is_authenticated and (user.is_admin or admin_club_id(user) is not None)
+
+
+def visible_audit_entries(user) -> QuerySet[AuditEntry]:
+    """Main administrator: all entries. Club administrator: those of their club (no logins)."""
+    qs = AuditEntry.objects.select_related("content_type", "club", "squad")
+    if user.is_authenticated and user.is_admin:
+        return qs
+    club_id = admin_club_id(user) if user.is_authenticated else None
+    return qs.filter(club_id=club_id) if club_id is not None else qs.none()

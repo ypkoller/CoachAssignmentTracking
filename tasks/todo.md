@@ -268,3 +268,79 @@ Haupt- und Vereins-Admins ernennen Vereins-Admins · Vereins-Admin hat bei Eins�
 - [x] `.github/workflows/security.yml` (Push, PR, wöchentlich) und `.github/dependabot.yml`
 - [x] Verifikation: alle CI-Schritte lokal nachgestellt, 71 Tests grün, mypy sauber, `/health/` ok
 - [ ] Auf GitHub einschalten: CodeQL (Default setup), Dependabot alerts, Secret scanning + Push protection
+
+---
+
+# Änderungsprotokoll (Branch `feature/audit-log`)
+
+Antworten (2026-11-01): sehen dürfen **nur Admins** (Haupt-Admin alles, Vereins-Admin sein Verein) ·
+**eigene Seite** in der App · Export **Excel + CSV** · protokolliert werden Benutzer, Personen, Einsätze,
+Riegenleitung, Riegenzuteilung **und Riegen**.
+
+## Design
+
+- Neue App `auditlog`, Modell `AuditEntry` («Änderung»), erbt `AuditedModel`:
+  `created_at` = wann, `created_by` = wer (aus `CurrentUserMiddleware`, ohne Request leer = «System»).
+  Zusätzlich:
+  - `actor_name`: Name bzw. E-Mail des Handelnden zum Zeitpunkt der Änderung, damit es auch nach dem Löschen eines Logins lesbar bleibt
+  - `action`: Erstellt / Geändert / Gelöscht
+  - `content_type` (Bereich), `object_id`, `object_repr`
+  - `changes` (JSON: `{feld: [alt, neu]}`, als lesbarer Text zum Zeitpunkt der Änderung)
+  - `club` und `squad` (FK, `SET_NULL`) für die Filter; Indizes auf Zeitpunkt, Verein, Riege, Handelnden
+- Erfassung per Django-Signale für die registrierten Modelle (keine Änderung an den bestehenden Modellen):
+  - `pre_save`: alten Stand aus der DB lesen
+  - `post_save`: Unterschied speichern. Hat sich kein protokolliertes Feld geändert (z.B. nur `last_login`), entsteht kein Eintrag
+  - `post_delete`: alter Stand. Gilt auch für Löschen im Admin (Mehrfachauswahl) und kaskadierte Löschungen, z.B. Person → Zuteilungen
+- Werte als Anzeige-Text: Fremdschlüssel → Name, Auswahl → «Hauptleiter», Ja/Nein, Datum `TT.MM.JJJJ`.
+  Nicht protokolliert: Audit-Felder, `last_login`. **Passwort**: nur «geändert», nie der Hash.
+- Verein/Riege je Eintrag: Riege → Verein + Riege; Person → Verein; Riegenleitung/Zuteilung/Einsatz → Riege
+  + deren Verein; Benutzer (Login) → kein Verein, nur für den Haupt-Admin sichtbar
+- Einträge sind schreibgeschützt: keine Bearbeitung/Löschung über die Oberfläche
+- Berechtigung in `training/permissions.py`: `can_view_audit(user)`, `visible_audit_entries(user)`
+
+## Plan
+
+- [x] 1. App `auditlog`: Modell, Migration, Registry + Signale, Wert-Formatierung
+- [x] 2. Berechtigungen (Haupt-Admin alles, Vereins-Admin nur Einträge seines Vereins)
+- [x] 3. Seite «Änderungen» (`/changes/`) im Stil der Auswertung:
+      - Filter: Von/Bis, Verein (nur Haupt-Admin), Riege, geändert von, Bereich
+      - Tabelle: Zeitpunkt, geändert von, Bereich, Aktion, Objekt, «Feld: alt → neu», seitenweise je 100 Einträge
+      - Menüpunkt «Änderungen» nur für Admins
+- [x] 4. Export Excel/CSV (`/changes/export/`) mit denselben Filtern, eine Zeile je geändertem Feld,
+      `spreadsheet_safe`
+- [x] 5. Tests:
+      - Erstellen/Ändern/Löschen je Modell, Handelnder aus dem Request
+      - Passwort ohne Hash; Login (`last_login`) ohne Eintrag
+      - kaskadiertes Löschen und Mehrfach-Löschen im Admin
+      - Erfassen/Löschen über `toggle_attendance`
+      - Sichtbarkeit Haupt-/Vereins-Admin/Leiter (403), alle Filter, Export inklusive Formel-Schutz
+- [x] 6. Doku: README (Änderungsprotokoll), CLAUDE.md (Glossar, Konvention: neue Modelle in der Registry eintragen)
+- [x] 7. Verifikation: Tests, mypy, ruff, `makemigrations --check`; lokal mit `docker compose up` + `seed_demo`
+      als Haupt-Admin und Vereins-Admin durchspielen. Lokal testen kannst du danach selbst, siehe unten
+
+## Lokal testen (für dich)
+
+```bash
+docker compose up -d --build
+docker compose exec web python manage.py seed_demo   # Passwort demo1234!
+```
+Als Admin bzw. Vereins-Admin einloggen, Einsätze erfassen, im Admin Personen/Zuteilungen ändern →
+Menü «Änderungen» → Filter ausprobieren, Excel/CSV herunterladen.
+
+## Offen / Hinweise
+
+- Änderungen von vor der Einführung sind nicht im Protokoll (die bestehenden Felder «erstellt/geändert von» bleiben)
+- Keine automatische Löschung alter Einträge; bei Bedarf später eine Aufbewahrungsfrist festlegen
+
+## Review
+
+- App `auditlog`: `AuditEntry` + Signale (`tracking.py`, Registry `TRACKED`), Migration `0001_initial`
+- Einträge entstehen auch bei Mehrfach-Löschen im Admin und kaskadiertem Löschen; Verweise auf
+  Verein/Riege/Handelnden ohne DB-Constraint, damit Einträge gelöschte Objekte überdauern
+  (sonst würde das Löschen einer Riege samt Zuteilungen scheitern)
+- Seite `/changes/` (Menü ☰ → «Änderungsprotokoll»), Filter Von/Bis, Verein, Riege, geändert von, Bereich;
+  100 pro Seite; Export Excel/CSV. Gemeinsame Hilfsfunktion `spreadsheet_response` für beide Exporte
+- 87 Tests grün (15 neue), mypy und ruff sauber, `makemigrations --check` ohne Änderungen
+- Lokal per HTTP geprüft: Einsatz erfassen/löschen als Vereins-Admin und Haupt-Admin, Person im Admin
+  ändern → Einträge mit richtigem Handelnden, alt → neu, Verein/Riege; Vereins-Admin sieht keine Logins
+  und hat keinen Vereinsfilter; Filter und CSV/Excel-Download funktionieren

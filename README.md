@@ -58,6 +58,19 @@ Permissions are checked per object, i.e. per squad and person, not just per role
 - **No compensation** is calculated. What is reported is the **number of attendances**.
 - Export per period: number of attendances per person, squad and role.
 
+## Change log (Änderungsprotokoll)
+
+Every create, change and delete of logins, persons, squads, squad leaderships, assignments and attendances
+is stored in the database (`auditlog.AuditEntry`): who, when, what (old → new value per field), and the club
+and squad it belongs to. This also covers deletes in the admin (bulk action) and cascaded deletes. Passwords
+are only noted as "geändert", never stored; a plain login is not a change. Entries are read-only.
+
+Menu ☰ → *Änderungsprotokoll* (administrators only): filters for period, club (main administrator), squad,
+changed by and area, export as Excel/CSV (one row per changed field). The main administrator sees everything,
+a club administrator the changes in their club; changes to logins belong to no club and are visible to the
+main administrator only. Changes without a request (e.g. `seed_demo`) show "System" as author. Changes
+made before the change log was introduced are not included; entries are kept indefinitely.
+
 ## Data model
 
 ### Entities

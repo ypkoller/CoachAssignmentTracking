@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "axes",
     "accounts",
     "training",
+    "auditlog",
 ]
 
 MIDDLEWARE = [

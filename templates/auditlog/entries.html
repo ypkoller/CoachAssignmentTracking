@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Änderungsprotokoll{% endblock %}
+{% block content %}
+<h1 class="mb-4 text-2xl font-bold text-svf-dark">Änderungsprotokoll</h1>
+
+<form method="get" class="form-svf mb-6 grid grid-cols-2 gap-3 rounded-xl bg-white p-4 shadow-sm sm:grid-cols-3">
+  <div><label for="from" class="mb-1 block text-sm font-medium">Von</label><input type="date" id="from" name="from" value="{{ since|date:'Y-m-d' }}"></div>
+  <div><label for="to" class="mb-1 block text-sm font-medium">Bis</label><input type="date" id="to" name="to" value="{{ until|date:'Y-m-d' }}"></div>
+  {% for field in form %}
+  <div><label for="{{ field.id_for_label }}" class="mb-1 block text-sm font-medium">{{ field.label }}</label>{{ field }}</div>
+  {% endfor %}
+  <button class="col-span-2 rounded-lg bg-svf px-4 py-2.5 font-medium text-white hover:bg-svf-dark sm:col-span-1 sm:self-end">Anzeigen</button>
+</form>
+
+<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+  <h2 class="text-sm font-semibold uppercase tracking-wide text-svf">Änderungen ({{ page.paginator.count }})</h2>
+  <div class="flex gap-2 text-sm">
+    <a href="{% url 'audit_export' %}{% querystring format='xlsx' page=None %}" class="rounded-full bg-svf px-4 py-2 font-medium text-white hover:bg-svf-dark">Excel</a>
+    <a href="{% url 'audit_export' %}{% querystring format='csv' page=None %}" class="rounded-full border-2 border-svf px-4 py-2 font-medium text-svf hover:bg-svf-pale">CSV</a>
+  </div>
+</div>
+
+<div class="space-y-3">
+  {% for entry in page %}
+  <article class="rounded-xl bg-white p-4 shadow-sm">
+    <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+      <p class="font-medium text-svf-dark">
+        <span class="rounded-full px-2 py-0.5 text-xs font-semibold {% if entry.action == 'CREATE' %}bg-green-100 text-green-800{% elif entry.action == 'DELETE' %}bg-red-100 text-red-800{% else %}bg-svf-light/60 text-svf-dark{% endif %}">{{ entry.get_action_display }}</span>
+        {{ entry.area }}: {{ entry.object_repr }}
+      </p>
+      <p class="whitespace-nowrap text-xs text-gray-500">{{ entry.timestamp|date:"d.m.Y H:i" }}</p>
+    </div>
+    <p class="mt-1 text-xs text-gray-500">von {{ entry.actor_label }}{% if entry.club %} · {{ entry.club }}{% endif %}{% if entry.squad %} · {{ entry.squad }}{% endif %}</p>
+    {% if entry.changes %}
+    <dl class="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+      {% for field, old, new in entry.changes %}
+      <dt class="text-gray-500">{{ field }}</dt>
+      <dd class="break-words">{% if old %}<span class="text-red-700 line-through">{{ old }}</span>{% endif %}{% if old and new %} → {% endif %}{% if new %}<span class="text-green-800">{{ new }}</span>{% endif %}</dd>
+      {% endfor %}
+    </dl>
+    {% endif %}
+  </article>
+  {% empty %}
+  <p class="rounded-xl bg-white px-4 py-3 text-sm text-gray-500 shadow-sm">Keine Änderungen für diese Filter.</p>
+  {% endfor %}
+</div>
+
+{% if page.paginator.num_pages > 1 %}
+<nav class="mt-6 flex items-center justify-between text-sm">
+  {% if page.has_previous %}<a href="{% querystring page=page.previous_page_number %}" class="rounded-lg border border-svf bg-white px-4 py-2 font-medium text-svf hover:bg-svf-pale">← Neuere</a>{% else %}<span></span>{% endif %}
+  <span class="text-gray-500">Seite {{ page.number }} von {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a href="{% querystring page=page.next_page_number %}" class="rounded-lg border border-svf bg-white px-4 py-2 font-medium text-svf hover:bg-svf-pale">Ältere →</a>{% else %}<span></span>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

@@ -31,6 +31,7 @@
               <button name="club" value="{{ person.club_id }}" class="w-full px-4 py-2 text-left hover:bg-svf-pale">Wechseln zu {{ person.club }}</button>
             </form>
             {% endif %}{% endfor %}
+            {% if user.is_staff %}<a href="{% url 'audit_entries' %}" class="block px-4 py-2 hover:bg-svf-pale">Änderungsprotokoll</a>{% endif %}
             <a href="{% url 'password_change' %}" class="block px-4 py-2 hover:bg-svf-pale">Passwort ändern</a>
             <form method="post" action="{% url 'logout' %}">{% csrf_token %}
               <button class="w-full px-4 py-2 text-left hover:bg-svf-pale">Abmelden</button>
