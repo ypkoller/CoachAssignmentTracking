@@ -83,7 +83,8 @@ DJANGO_SECRET_KEY=mypy .venv/Scripts/mypy .          # type check (django-stubs 
 - **Code is English** (identifiers, comments, docstrings, URL paths, DB schema).
   **Everything the user sees is German** (verbose names, labels, messages, template text, export headers).
   Glossary: Verein=`Club`, Riege=`Squad`, Riegenleitung=`SquadLeadership`, Riegenzuteilung=`SquadAssignment`,
-  Einsatz=`Attendance`, Funktion=`Role` (`HEAD_LEADER`/`ASSISTANT_LEADER`), Einladung=`Invitation`.
+  Einsatz=`Attendance`, Funktion=`Role` (`HEAD_LEADER`/`ASSISTANT_LEADER`), Einladung=`Invitation`,
+  Änderungsprotokoll=`auditlog.AuditEntry`.
 - Every model inherits `accounts.audit.AuditedModel` (`created_at/by`, `updated_at/by`). The acting user
   comes from `CurrentUserMiddleware` (contextvar); outside requests it is `None`. Do not set these fields
   by hand. `QuerySet.update()`/`bulk_create()` bypass `save()` and therefore the audit fields; avoid them.
@@ -91,6 +92,10 @@ DJANGO_SECRET_KEY=mypy .venv/Scripts/mypy .          # type check (django-stubs 
 - The admin creates logins and invitations through `accounts/invitations.py` (`invite`, `send_invitation`);
   a login without a usable password counts as invited but not registered.
 - Permissions are object-level and live in `training/permissions.py`; every view checks through them.
+- Change log: `auditlog/tracking.py` writes an `AuditEntry` via model signals for the models in `TRACKED`
+  (model → club/squad scope). Add new data models there. Values are stored as display text; passwords only
+  as "geändert". `AuditEntry` is the one model without `AuditedModel` (never changed; its club/squad/actor
+  references have no DB constraint so entries survive deletes, also those written during a cascade).
 - Clubs: a `User` has one `Person` per club (`Person.user`). The club chosen at login is in the session;
   `accounts.clubs.ClubMiddleware` sets `request.user.person` (person in that club) and `club_persons`.
   Permissions always use `user.person`, never `user.persons`. `user.is_admin` = main administrator

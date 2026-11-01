@@ -10,5 +10,6 @@ urlpatterns = [
     path("admin/login/", admin_login),
     path("admin/", admin.site.urls),
     path("account/", include("accounts.urls")),
+    path("changes/", include("auditlog.urls")),
     path("", include("training.urls")),
 ]

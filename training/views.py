@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST
 from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 
 from .forms import AssignmentForm
 from .models import (
@@ -198,27 +199,11 @@ def spreadsheet_safe(value):
     return value
 
 
-@login_required
-def export(request):
-    """Number of attendances per person, squad and role in the period (CSV or Excel)."""
-    since, until = period(request)
-    roles = dict(Role.choices)
-    header = ["Name", "Vorname", "Riege", "Funktion", "Anzahl Einsätze"]
-    data = [
-        [
-            spreadsheet_safe(value)
-            for value in (
-                r["person__last_name"],
-                r["person__first_name"],
-                r["squad__name"],
-                roles[r["role"]],
-                r["count"],
-            )
-        ]
-        for r in summary(request, since, until)
-    ]
-    filename = f"einsaetze_{since:%Y-%m-%d}_{until:%Y-%m-%d}"
-
+def spreadsheet_response(
+    request, filename: str, title: str, header: list[str], data: list[list], widths: list[int]
+) -> HttpResponse:
+    """CSV (`?format=csv`) or Excel download. Text passes through `spreadsheet_safe`."""
+    data = [[spreadsheet_safe(value) for value in row] for row in data]
     if request.GET.get("format") == "csv":
         response = HttpResponse(content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="{filename}.csv"'
@@ -231,19 +216,38 @@ def export(request):
 
     wb = Workbook()
     ws = wb.active
-    ws.title = "Einsätze"
-    ws.append([f"Einsätze vom {since:%d.%m.%Y} bis {until:%d.%m.%Y}"])
+    ws.title = title[:31]  # Excel limit for sheet names
+    ws.append([title])
     ws.append(header)
     for row in data:
         ws.append(row)
-    for column, width in zip("ABCDE", (20, 20, 25, 15, 16)):
-        ws.column_dimensions[column].width = width
+    for index, width in enumerate(widths):
+        ws.column_dimensions[get_column_letter(index + 1)].width = width
     response = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
     response["Content-Disposition"] = f'attachment; filename="{filename}.xlsx"'
     wb.save(response)
     return response
+
+
+@login_required
+def export(request):
+    """Number of attendances per person, squad and role in the period (CSV or Excel)."""
+    since, until = period(request)
+    roles = dict(Role.choices)
+    data = [
+        [r["person__last_name"], r["person__first_name"], r["squad__name"], roles[r["role"]], r["count"]]
+        for r in summary(request, since, until)
+    ]
+    return spreadsheet_response(
+        request,
+        f"einsaetze_{since:%Y-%m-%d}_{until:%Y-%m-%d}",
+        f"Einsätze vom {since:%d.%m.%Y} bis {until:%d.%m.%Y}",
+        ["Name", "Vorname", "Riege", "Funktion", "Anzahl Einsätze"],
+        data,
+        [20, 20, 25, 15, 16],
+    )
 
 
 @login_required
