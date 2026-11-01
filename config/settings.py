@@ -1,6 +1,7 @@
 """Django settings. All environment-specific values come from environment variables."""
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
@@ -117,10 +118,12 @@ LOGIN_REDIRECT_URL = "record"
 LOGOUT_REDIRECT_URL = "login"
 PASSWORD_RESET_TIMEOUT = 60 * 60  # 1 h
 
+# 5 failed logins lock that login from that IP for 30 minutes; failures also expire after 30 minutes.
+# Locking IP and username together keeps others from locking out a user from a different IP.
 AXES_FAILURE_LIMIT = 5
-AXES_COOLOFF_TIME = 1  # hours
+AXES_COOLOFF_TIME = timedelta(minutes=30)
 AXES_USERNAME_FORM_FIELD = "username"
-AXES_LOCKOUT_PARAMETERS = ["ip_address", "username"]
+AXES_LOCKOUT_PARAMETERS = [["ip_address", "username"]]
 AXES_CLIENT_IP_CALLABLE = "config.client_ip.client_ip"
 RATELIMIT_IP_META_KEY = "config.client_ip.client_ip"
 

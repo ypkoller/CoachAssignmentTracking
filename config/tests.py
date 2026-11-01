@@ -1,8 +1,11 @@
+from datetime import timedelta
 from unittest import mock
 
+from axes.models import AccessAttempt
 from django.db import OperationalError
 from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from .client_ip import client_ip
 
@@ -25,20 +28,35 @@ class ClientIpTest(SimpleTestCase):
         self.assertEqual(client_ip(self.request()), "10.0.0.2")
 
 
+@override_settings(PROXY_COUNT=1)
 class LoginLockoutTest(TestCase):
-    @override_settings(PROXY_COUNT=1, AXES_FAILURE_LIMIT=2)
-    def test_login_lockout_is_per_client_behind_proxy(self):
-        def login(ip, email):
-            return self.client.post(
-                reverse("login"),
-                {"username": email, "password": "falsch"},
-                HTTP_X_FORWARDED_FOR=ip,
-            )
+    def login(self, ip, email):
+        return self.client.post(
+            reverse("login"),
+            {"username": email, "password": "falsch"},
+            HTTP_X_FORWARDED_FOR=ip,
+        )
 
-        for _ in range(2):
-            login("1.1.1.1", "a@example.ch")
-        self.assertEqual(login("1.1.1.1", "x@example.ch").status_code, 429)
-        self.assertEqual(login("2.2.2.2", "y@example.ch").status_code, 200)
+    def fail_logins(self, ip, email, times=5):
+        for _ in range(times):
+            self.login(ip, email)
+
+    def test_fifth_failure_locks_ip_and_username_together(self):
+        for _ in range(4):
+            self.assertEqual(self.login("1.1.1.1", "a@example.ch").status_code, 200)
+        self.assertEqual(self.login("1.1.1.1", "a@example.ch").status_code, 429)
+        self.assertEqual(self.login("1.1.1.1", "a@example.ch").status_code, 429)
+        # Neither another login from the same IP nor the same login from another IP is locked.
+        self.assertEqual(self.login("1.1.1.1", "b@example.ch").status_code, 200)
+        self.assertEqual(self.login("2.2.2.2", "a@example.ch").status_code, 200)
+
+    def test_lock_ends_after_30_minutes(self):
+        self.fail_logins("1.1.1.1", "a@example.ch")
+        for minutes, status in [(29, 429), (31, 200)]:
+            # Moves the recorded failures back in time (the axes table, not app data).
+            attempt_time = timezone.now() - timedelta(minutes=minutes)
+            AccessAttempt.objects.update(attempt_time=attempt_time)
+            self.assertEqual(self.login("1.1.1.1", "a@example.ch").status_code, status)
 
 
 @override_settings(ALLOWED_HOSTS=["training.example.ch"])
