@@ -1,0 +1,46 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Django tests (Postgres)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Same image and Postgres as locally: constraints, triggers and the Tailwind build are covered.
+      - name: Build
+        run: docker compose build web
+      - name: Missing migrations
+        run: docker compose run --rm web python manage.py makemigrations --check --dry-run
+      - name: Tests
+        run: docker compose run --rm web python manage.py test
+      - name: Stop
+        if: always()
+        run: docker compose down -v
+
+  lint:
+    name: Lint and types (ruff, mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - name: Install (dev dependencies from poetry.lock)
+        run: |
+          pip install "poetry==2.5.1"
+          poetry install --no-interaction
+      - name: ruff
+        run: poetry run ruff check .
+      - name: mypy
+        env:
+          DJANGO_SECRET_KEY: mypy
+        run: poetry run mypy .
