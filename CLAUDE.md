@@ -69,8 +69,7 @@ docker compose up -d --build                         # app + Postgres on http://
 docker compose exec web python manage.py seed_demo   # demo data, password demo1234!
 docker compose run --rm web python manage.py test    # tests need Postgres (constraints, triggers)
 DJANGO_SECRET_KEY=mypy .venv/Scripts/mypy .          # type check (django-stubs loads the settings)
-.venv/Scripts/ruff check .                           # lint, must be clean (RUF012 is ignored in pyproject)
-.venv/Scripts/ruff check --select S .                # security rules (flake8-bandit), must be clean
+.venv/Scripts/ruff check .                           # lint incl. security rules S (flake8-bandit), must be clean
 ```
 
 - The Docker image contains only production dependencies; mypy/ruff run from the local `.venv`
@@ -107,11 +106,12 @@ DJANGO_SECRET_KEY=mypy .venv/Scripts/mypy .          # type check (django-stubs 
   production behind Coolify/Traefik = 1). Never read `REMOTE_ADDR` or `X-Forwarded-For` directly.
 - `/health/` is answered by `config.health.HealthCheckMiddleware` (first middleware, before the host
   check); used by the Docker `HEALTHCHECK` and Coolify.
-- Security checks: `.github/workflows/security.yml` (push, PR, weekly): ruff `S`, Semgrep, pip-audit,
+- Security checks: `.github/workflows/security.yml` (push, PR, weekly): Semgrep, pip-audit,
   Trivy (image + Dockerfile), `check --deploy`; Dependabot in `.github/dependabot.yml`. Justify every
   `noqa: S…` / `nosemgrep`. The runtime image contains no pip (its vendored libraries trigger CVEs).
 - Tests: `.github/workflows/tests.yml` (push, PR): Django tests and `makemigrations --check` in the
-  Docker image via `docker compose`, plus ruff and mypy with the dev dependencies from `poetry.lock`.
+  Docker image via `docker compose`, plus ruff (incl. `S`) and mypy with the dev dependencies from `poetry.lock`. Do not pin ruff
+  or mypy in workflows; their versions come from `poetry.lock` (Dependabot).
 - Spreadsheet exports pass text through `training.views.spreadsheet_safe` (CSV/formula injection).
 - Deployment: Coolify v4, Dockerfile build pack, separate Coolify Postgres; see README "Deployment".
 
