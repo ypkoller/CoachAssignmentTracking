@@ -19,7 +19,7 @@ dependencies = [
 package-mode = false
 
 [tool.poetry.group.dev.dependencies]
-ruff = ">=0.8"
+ruff = ">=0.17.2"
 mypy = ">=2.4"
 django-stubs = {extras = ["compatible-mypy"], version = ">=6.1"}
 
