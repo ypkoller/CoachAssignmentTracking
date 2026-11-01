@@ -44,3 +44,29 @@ jobs:
         env:
           DJANGO_SECRET_KEY: mypy
         run: poetry run mypy .
+
+  # Deploys master to Coolify only when tests and lint are green (Coolify's own Auto Deploy is off).
+  # The secrets live in the GitHub environment "production"; pull requests never reach this job.
+  deploy:
+    name: Deploy (Coolify)
+    needs: [tests, lint]
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Trigger deployment
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_APP_UUID: ${{ secrets.COOLIFY_APP_UUID }}
+        run: |
+          for name in COOLIFY_URL COOLIFY_TOKEN COOLIFY_APP_UUID; do
+            if [ -z "${!name}" ]; then echo "::error::Secret $name is missing in environment production"; exit 1; fi
+          done
+          curl --fail-with-body --silent --show-error --max-time 60 \
+            --header "Authorization: Bearer $COOLIFY_TOKEN" \
+            --get --data-urlencode "uuid=$COOLIFY_APP_UUID" \
+            "${COOLIFY_URL%/}/api/v1/deploy"

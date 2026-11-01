@@ -236,7 +236,15 @@ with scheduled backups. `docker-compose.yml` is only used for local development.
 
 7. *Healthcheck*: enable, path `/health` (with or without trailing slash), port `8000` (the image contains `curl`; the Dockerfile also
    defines a `HEALTHCHECK`). `/health/` also checks the database connection.
-8. *Advanced*: enable **Auto Deploy**, so that every push to `master` deploys.
+8. *Advanced*: **disable Auto Deploy**. GitHub Actions deploys instead, and only once the tests are green
+   (job *Deploy (Coolify)* in `.github/workflows/tests.yml`, after every push to `master`; a manual run
+   *Actions → Tests → Run workflow* on `master` deploys too):
+   - Coolify: *Keys & Tokens → API tokens*, create a token with the permission **deploy**
+     (the API must be enabled under *Settings → Advanced*). The app's UUID is in its URL
+     (`…/application/<uuid>`).
+   - GitHub: *Settings → Environments → New environment* `production`, *Deployment branches* only
+     `master`, then three environment secrets: `COOLIFY_URL` (dashboard URL, HTTPS, e.g.
+     `https://coolify.example.ch`), `COOLIFY_TOKEN`, `COOLIFY_APP_UUID`.
 9. *Deploy*. On start, the container runs the migrations and creates the cache table.
 10. Create the first administrator in *Terminal* of the app: `python manage.py createsuperuser`.
     The Coolify terminal needs ports 6001/6002 to be reachable; alternatively via SSH on the server:

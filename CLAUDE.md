@@ -119,6 +119,8 @@ DJANGO_SECRET_KEY=mypy .venv/Scripts/mypy .          # type check (django-stubs 
   or mypy in workflows; their versions come from `poetry.lock` (Dependabot).
 - Spreadsheet exports pass text through `training.views.spreadsheet_safe` (CSV/formula injection).
 - Deployment: Coolify v4, Dockerfile build pack, separate Coolify Postgres; see README "Deployment".
+  Coolify's Auto Deploy is off: the `deploy` job in `tests.yml` calls the Coolify API after tests and lint
+  pass on `master` (secrets in the GitHub environment `production`).
 
 ### How the business rules are enforced
 
