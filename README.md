@@ -18,7 +18,7 @@ reports and an export of the number of attendances. The user interface is in Ger
 | Static files | **WhiteNoise** | Serves CSS/JS directly from Django |
 | Export | `openpyxl` / CSV | Excel export of the number of attendances |
 | Password hashing | Argon2 (`argon2-cffi`) | Django's PBKDF2 as fallback |
-| Rate limiting | `django-axes` / `django-ratelimit` | Protects login and password reset |
+| Rate limiting | `django-axes` / `django-ratelimit` | Protects login and password reset (login: 5 failures of a login from one IP lock that combination for 30 min) |
 | Type checking | **mypy** + `django-stubs` | Static checks of the code |
 | Deployment | **Docker Compose → Coolify** | Coolify handles HTTPS, domain and DB backups |
 
