@@ -1,5 +1,6 @@
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.models import Group
 
 from training.admin_scope import ClubScopedAdmin
 from training.models import Person
@@ -7,6 +8,9 @@ from training.models import Person
 from .audit import AUDIT_FIELDS, AuditedAdminMixin
 from .invitations import has_registered, invitation_message, send_invitation
 from .models import Invitation, User, default_invitation_expiry
+
+# Rights come from is_superuser and Person.is_club_admin, not from Django groups.
+admin.site.unregister(Group)
 
 PERSON_FIELDS = ("last_name", "first_name", "club", "is_active", "is_club_admin")
 

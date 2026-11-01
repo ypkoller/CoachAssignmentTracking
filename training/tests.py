@@ -370,6 +370,10 @@ class PersonLoginAdminTest(Base):
     def setUp(self):
         self.client.force_login(self.admin)
 
+    def test_no_groups_in_admin(self):
+        self.assertNotContains(self.client.get(reverse("admin:index")), "Gruppen")
+        self.assertEqual(self.client.get("/admin/auth/group/").status_code, 404)
+
     def add_person(self, email="dora@example.ch", **extra):
         data = {
             "last_name": "Neu",
