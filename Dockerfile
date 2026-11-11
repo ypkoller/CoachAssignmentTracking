@@ -1,5 +1,5 @@
 # --- Build stage: install dependencies with Poetry into a venv -------------------
-FROM python:3.14-slim AS builder
+FROM python:3.15-slim AS builder
 
 ENV POETRY_VIRTUALENVS_IN_PROJECT=true \
     POETRY_NO_INTERACTION=1 \
@@ -13,7 +13,7 @@ RUN poetry install --only main --no-root \
     && .venv/bin/python -m pip uninstall -y pip
 
 # --- Asset stage: build the CSS with the Tailwind standalone CLI (no Node needed) -
-FROM python:3.14-slim AS assets
+FROM python:3.15-slim AS assets
 
 ARG TAILWIND_VERSION=3.4.16
 ARG TARGETARCH
@@ -34,7 +34,7 @@ COPY templates templates
 RUN tailwindcss -c frontend/tailwind.config.js -i frontend/app.css -o static/css/app.css --minify
 
 # --- Runtime stage: only venv and code, without Poetry ---------------------------
-FROM python:3.14-slim
+FROM python:3.15-slim
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
